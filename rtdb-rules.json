@@ -1,0 +1,60 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "vaultRequests": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$requestId": {
+        ".write": "auth != null"
+      }
+    },
+    "contactMessages": {
+      ".read": true,
+      ".write": true,
+      "$messageId": {
+        ".write": "auth != null"
+      }
+    },
+    "assets": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$assetId": {
+        ".write": "auth != null"
+      }
+    },
+    "orders": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$orderId": {
+        ".write": "auth != null"
+      }
+    },
+    "shipments": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$shipmentId": {
+        ".write": "auth != null"
+      }
+    },
+    "newsletter": {
+      ".read": "auth != null",
+      ".write": true,
+      "$subId": {
+        ".write": "auth != null"
+      }
+    },
+    "transactions": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$transactionId": {
+        ".read": "data.child('userId').val() === auth.uid || root.child('admins').child(auth.uid).exists()",
+        ".write": "auth != null"
+      }
+    }
+  }
+}

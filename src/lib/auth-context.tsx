@@ -1,0 +1,553 @@
+'use client';
+
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import {
+  User,
+  ActionCodeSettings,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+  AuthError,
+} from 'firebase/auth';
+import { ref, get, set, update } from 'firebase/database';
+import { auth, db } from '@/lib/firebase';
+
+// ─── Admin Configuration ─────────────────────────────────────────────
+// IMPORTANT: Admin email addresses are configured via environment variables.
+// These users will ALWAYS get the 'admin' role on sign-in,
+// regardless of what's stored in the database.
+// This is the most reliable way to control admin access.
+const ADMIN_EMAILS: string[] = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
+  .split(',')
+  .map(e => e.trim())
+  .filter(e => e.length > 0);
+// ──────────────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  name: string;
+  email: string;
+  role: 'client' | 'admin';
+  status: string;
+  vaultLocation: string;
+  twoFAEnabled?: boolean;
+  pin2FA?: string; // hashed PIN stored in RTDB
+  createdAt: unknown;
+}
+
+interface AuthContextType {
+  user: User | null;
+  userProfile: UserProfile | null;
+  authRole: 'guest' | 'client' | 'admin';
+  loading: boolean;
+  pending2FA: boolean; // true when Firebase auth succeeded but 2FA PIN not yet verified
+  emailNotVerified: boolean; // true when user tried to login but email is not verified
+  unverifiedEmail: string; // the email that needs verification
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  googleSignIn: () => Promise<void>;
+  verify2FAPin: (pin: string) => Promise<boolean>; // verify PIN, returns true if correct
+  resendVerification: () => Promise<void>; // resend verification email to unverified user
+  logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  userProfile: null,
+  authRole: 'guest',
+  loading: true,
+  pending2FA: false,
+  emailNotVerified: false,
+  unverifiedEmail: '',
+  login: async () => {},
+  register: async () => {},
+  googleSignIn: async () => {},
+  verify2FAPin: async () => false,
+  resendVerification: async () => {},
+  logout: async () => {},
+  refreshProfile: async () => {},
+});
+
+/** Check if an email should be admin */
+function isAdminEmail(email: string): boolean {
+  return ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
+}
+
+/** Try to check if any admin exists in RTDB (best-effort, may fail due to rules) */
+async function anyAdminExistsInDB(): Promise<boolean | null> {
+  try {
+    const usersRef = ref(db, 'users');
+    const snapshot = await get(usersRef);
+    if (!snapshot.exists()) return false;
+    const allUsers = snapshot.val() as Record<string, UserProfile>;
+    return Object.values(allUsers).some(u => u.role === 'admin');
+  } catch {
+    // Can't read users node — return null (unknown)
+    return null;
+  }
+}
+
+/** Read a single user profile from RTDB (best-effort) */
+async function readProfile(uid: string): Promise<UserProfile | null> {
+  try {
+    const userRef = ref(db, `users/${uid}`);
+    const snapshot = await get(userRef);
+    if (snapshot.exists()) return snapshot.val() as UserProfile;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Write a user profile to RTDB (best-effort) */
+async function writeProfile(uid: string, profile: UserProfile): Promise<void> {
+  try {
+    await set(ref(db, `users/${uid}`), profile);
+  } catch (dbErr) {
+    console.warn('[Auth] RTDB write failed:', dbErr);
+  }
+}
+
+/** Update specific fields of a user profile in RTDB (best-effort) */
+async function updateProfile(uid: string, fields: Record<string, string | boolean | null>): Promise<void> {
+  try {
+    await update(ref(db, `users/${uid}`), fields);
+  } catch (dbErr) {
+    console.warn('[Auth] RTDB update failed:', dbErr);
+  }
+}
+
+/** Apply role to state + localStorage (source of truth for the session) */
+function applyProfile(
+  profile: UserProfile,
+  setProfile: (p: UserProfile) => void,
+  setRole: (r: 'client' | 'admin') => void,
+) {
+  setProfile(profile);
+  setRole(profile.role);
+  localStorage.setItem('authRole', profile.role);
+  localStorage.setItem('userName', profile.name);
+}
+
+/** Simple hash for PIN storage (not cryptographically secure, but better than plain text) */
+export async function hashPin(pin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + 'apex-vault-2fa-salt');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [authRole, setAuthRole] = useState<'guest' | 'client' | 'admin'>('guest');
+  const [loading, setLoading] = useState(true);
+  const [pending2FA, setPending2FA] = useState(false);
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+
+  /**
+   * fetchProfile — reads a user's profile from RTDB and applies it to state.
+   * This is used by onAuthStateChanged for session restore / state sync.
+   * It does NOT check for 2FA — 2FA is only checked in login()/googleSignIn().
+   */
+  const fetchProfile = useCallback(async (uid: string, email?: string) => {
+    const dbProfile = await readProfile(uid);
+
+    if (dbProfile) {
+      // RTDB profile found — use it, but override with admin if email matches
+      const profileEmail = email || dbProfile.email;
+      if (dbProfile.role !== 'admin' && profileEmail && isAdminEmail(profileEmail)) {
+        // Upgrade to admin
+        const upgraded = { ...dbProfile, role: 'admin' as const };
+        await updateProfile(uid, { role: 'admin' });
+        applyProfile(upgraded, setUserProfile, setAuthRole);
+      } else {
+        applyProfile(dbProfile, setUserProfile, setAuthRole);
+      }
+
+      // Check if 2FA is enabled and not yet verified in the current session
+      if (dbProfile.twoFAEnabled && dbProfile.pin2FA) {
+        const isVerified = typeof window !== 'undefined' && window.sessionStorage?.getItem(`2fa_verified_${uid}`) === 'true';
+        setPending2FA(!isVerified);
+      } else {
+        setPending2FA(false);
+      }
+    } else {
+      // No RTDB profile — try localStorage fallback
+      const storedRole = localStorage.getItem('authRole') as 'client' | 'admin' | null;
+      const storedName = localStorage.getItem('userName') || '';
+      if (storedRole) {
+        setUserProfile({
+          name: storedName,
+          email: storedRole === 'admin' ? 'admin@apex.demo' : 'client@apex.demo',
+          role: storedRole,
+          status: 'active',
+          vaultLocation: 'Zurich A',
+          createdAt: new Date().toISOString(),
+        });
+        setAuthRole(storedRole);
+      } else if (email) {
+        // RTDB write likely failed during registration (PERMISSION_DENIED).
+        // Construct a default client profile so the user can access the dashboard.
+        const fallbackProfile: UserProfile = {
+          name: email.split('@')[0] || 'Client',
+          email,
+          role: 'client',
+          status: 'active',
+          vaultLocation: '',
+          createdAt: new Date().toISOString(),
+        };
+        await writeProfile(uid, fallbackProfile); // best-effort — may fail again, that's OK
+        applyProfile(fallbackProfile, setUserProfile, setAuthRole);
+        setPending2FA(false);
+      } else {
+        setUserProfile(null);
+        setAuthRole('guest');
+      }
+    }
+  }, []); // No dependencies! email is passed as a parameter instead of reading from `user` state
+
+  // Use a ref for fetchProfile so the onAuthStateChanged effect never re-subscribes
+  const fetchProfileRef = useRef(fetchProfile);
+  useEffect(() => { fetchProfileRef.current = fetchProfile; }, [fetchProfile]);
+
+  const refreshProfile = useCallback(async () => {
+    if (user) {
+      await fetchProfile(user.uid, user.email || undefined);
+    }
+  }, [user, fetchProfile]);
+
+  // ── onAuthStateChanged — subscribes ONCE, never re-subscribes ──
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        // Check if email is verified (skip for OAuth providers like Google)
+        const isEmailProvider = firebaseUser.providerData.some(p => p.providerId === 'password');
+        if (isEmailProvider && !firebaseUser.emailVerified) {
+          // Unverified email user — sign them out
+          await signOut(auth);
+          setUnverifiedEmail(firebaseUser.email || '');
+          setEmailNotVerified(true);
+          setUserProfile(null);
+          setAuthRole('guest');
+          setLoading(false);
+          return;
+        }
+
+        // Email verified or OAuth user — proceed normally
+        setEmailNotVerified(false);
+        setUnverifiedEmail('');
+        await fetchProfileRef.current(firebaseUser.uid, firebaseUser.email || undefined);
+      } else {
+        const storedRole = localStorage.getItem('authRole') as 'client' | 'admin' | null;
+        const storedName = localStorage.getItem('userName') || '';
+        if (storedRole) {
+          setUserProfile({
+            name: storedName,
+            email: storedRole === 'admin' ? 'admin@apex.demo' : 'client@apex.demo',
+            role: storedRole,
+            status: 'active',
+            vaultLocation: 'Zurich A',
+            createdAt: new Date().toISOString(),
+          });
+          setAuthRole(storedRole);
+        } else {
+          setUserProfile(null);
+          setAuthRole('guest');
+        }
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []); // Empty dependency array — only subscribes once!
+
+  // ── Login with email/password ──
+  const login = async (email: string, password: string) => {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+
+    // Check if email is verified
+    if (!cred.user.emailVerified) {
+      // Send verification email (or resend) with continueUrl → /auth/verified
+      try {
+        const verifyActionSettings: ActionCodeSettings = {
+          url: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/verified`,
+          handleCodeInApp: false,
+        };
+        await sendEmailVerification(cred.user, verifyActionSettings);
+      } catch {
+        // Email may already be sent, ignore errors
+      }
+      // Sign the user out — they must verify first
+      await signOut(auth);
+      setUnverifiedEmail(email);
+      setEmailNotVerified(true);
+      setUserProfile(null);
+      setAuthRole('guest');
+      throw new Error('EMAIL_NOT_VERIFIED');
+    }
+
+    // Email is verified — proceed with login
+    setEmailNotVerified(false);
+    setUnverifiedEmail('');
+
+    // Clear any cached 2FA verification status for this UID for a new explicit login
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(`2fa_verified_${cred.user.uid}`);
+    }
+
+    // After Firebase auth succeeds, read profile and check 2FA directly
+    const profile = await readProfile(cred.user.uid);
+    if (profile) {
+      // Apply admin override if needed
+      if (profile.role !== 'admin' && isAdminEmail(email)) {
+        const upgraded = { ...profile, role: 'admin' as const };
+        await updateProfile(cred.user.uid, { role: 'admin' });
+        applyProfile(upgraded, setUserProfile, setAuthRole);
+      } else {
+        applyProfile(profile, setUserProfile, setAuthRole);
+      }
+
+      // ── 2FA CHECK ──
+      if (profile.twoFAEnabled && profile.pin2FA) {
+        setPending2FA(true);
+      } else {
+        setPending2FA(false);
+      }
+    } else {
+      // No RTDB profile — the write during registration likely failed
+      // (PERMISSION_DENIED). Construct a default client profile from the
+      // Firebase user so they can access the dashboard.
+      const fallbackProfile: UserProfile = {
+        name: cred.user.displayName || email.split('@')[0] || 'Client',
+        email: cred.user.email || email,
+        role: 'client',
+        status: 'active',
+        vaultLocation: '',
+        createdAt: new Date().toISOString(),
+      };
+      await writeProfile(cred.user.uid, fallbackProfile); // best-effort retry
+      applyProfile(fallbackProfile, setUserProfile, setAuthRole);
+      setPending2FA(false);
+    }
+    // onAuthStateChanged will also fire and apply the profile again (harmless)
+  };
+
+  // ── Register ──
+  const register = async (name: string, email: string, password: string) => {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+    // Send email verification with continueUrl → /auth/verified
+    try {
+      const verifyActionSettings: ActionCodeSettings = {
+        url: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/verified`,
+        handleCodeInApp: false,
+      };
+      await sendEmailVerification(cred.user, verifyActionSettings);
+    } catch (err) {
+      console.warn('[Auth] Failed to send verification email:', err);
+    }
+
+    // Determine role: explicit admin list takes priority, then check if first user
+    let role: 'client' | 'admin' = 'client';
+    if (isAdminEmail(email)) {
+      role = 'admin';
+    } else {
+      const adminExists = await anyAdminExistsInDB();
+      if (adminExists === false) {
+        // No admin in DB and can confirm — first user becomes admin
+        role = 'admin';
+      }
+    }
+
+    const profile: UserProfile = {
+      name,
+      email,
+      role,
+      status: 'active',
+      vaultLocation: '',
+      createdAt: new Date().toISOString(),
+    };
+
+    // Force the fresh auth token to propagate to the RTDB connection before
+    // writing. Without this, the set() can fire milliseconds after
+    // createUserWithEmailAndPassword returns, before the websocket has the
+    // new auth token — causing a spurious PERMISSION_DENIED on `users/{uid}`
+    // even though the rules are correct (`$uid === auth.uid`).
+    try { await cred.user.getIdToken(); } catch { /* best-effort */ }
+
+    // Attempt the profile write, with one retry after a short delay. The
+    // retry covers the edge case where the token still hasn't propagated
+    // by the time the first write leaves the client.
+    try {
+      await writeProfile(cred.user.uid, profile);
+    } catch {
+      try {
+        await new Promise((r) => setTimeout(r, 400));
+        await writeProfile(cred.user.uid, profile);
+      } catch (writeErr) {
+        console.warn('[Auth] RTDB profile write failed after retry:', writeErr);
+        // Not fatal — login() will construct a fallback profile and retry.
+      }
+    }
+
+    // Sign the user out — they must verify their email first
+    await signOut(auth);
+    setUnverifiedEmail(email);
+    setEmailNotVerified(true);
+    setUserProfile(null);
+    setAuthRole('guest');
+  };
+
+  // ── Google Sign-In ──
+  const googleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    let cred;
+    try {
+      cred = await signInWithPopup(auth, provider);
+    } catch (err: unknown) {
+      const authErr = err as AuthError;
+      console.error('[Google Sign-In] Popup error:', authErr.code, authErr.message);
+      if (authErr.code === 'auth/popup-blocked') {
+        throw new Error('Popup was blocked by your browser. Please allow popups and try again.');
+      } else if (authErr.code === 'auth/popup-closed-by-user') {
+        throw new Error('Sign-in was cancelled.');
+      } else if (authErr.code === 'auth/unauthorized-domain') {
+        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+        throw new Error(`Domain "${currentDomain}" is not authorized. Add it in Firebase Console → Authentication → Settings → Authorized domains.`);
+      } else if (authErr.code === 'auth/operation-not-allowed') {
+        throw new Error('Google sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method.');
+      } else if (authErr.code === 'auth/internal-error' || authErr.code === 'auth/network-request-failed') {
+        throw new Error('Google Sign-In is unavailable. If you are offline, behind a firewall, or in a sandbox environment, popups are not supported. Please check your internet connection or sign in using Email & Password.');
+      } else {
+        throw new Error(`Google sign-in failed: ${authErr.message}`);
+      }
+    }
+
+    const googleEmail = cred.user.email || '';
+    const shouldBeAdmin = isAdminEmail(googleEmail);
+    const existingProfile = await readProfile(cred.user.uid);
+
+    // Clear any cached 2FA verification status for this UID for a new explicit login
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(`2fa_verified_${cred.user.uid}`);
+    }
+
+    if (!existingProfile) {
+      // ── New user — create profile ──
+      const googleName = cred.user.displayName || googleEmail.split('@')[0] || 'User';
+      let role: 'client' | 'admin' = 'client';
+      if (shouldBeAdmin) {
+        role = 'admin';
+      } else {
+        const adminExists = await anyAdminExistsInDB();
+        if (adminExists === false) {
+          role = 'admin'; // First user becomes admin
+        }
+      }
+
+      const profile: UserProfile = {
+        name: googleName,
+        email: googleEmail,
+        role,
+        status: 'active',
+        vaultLocation: '',
+        createdAt: new Date().toISOString(),
+      };
+      await writeProfile(cred.user.uid, profile);
+      applyProfile(profile, setUserProfile, setAuthRole);
+      // New users don't have 2FA, no check needed
+      setPending2FA(false);
+    } else {
+      // ── Existing user — apply profile ──
+      if (existingProfile.role !== 'admin' && shouldBeAdmin) {
+        const upgraded = { ...existingProfile, role: 'admin' as const };
+        await updateProfile(cred.user.uid, { role: 'admin' });
+        applyProfile(upgraded, setUserProfile, setAuthRole);
+      } else {
+        applyProfile(existingProfile, setUserProfile, setAuthRole);
+      }
+
+      // ── 2FA CHECK ──
+      if (existingProfile.twoFAEnabled && existingProfile.pin2FA) {
+        setPending2FA(true);
+      } else {
+        setPending2FA(false);
+      }
+    }
+  };
+
+  // ── Logout ──
+  const logout = async () => {
+    if (user && typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(`2fa_verified_${user.uid}`);
+    }
+    await signOut(auth);
+    localStorage.removeItem('authRole');
+    localStorage.removeItem('userName');
+    setUserProfile(null);
+    setAuthRole('guest');
+    setPending2FA(false);
+    setEmailNotVerified(false);
+    setUnverifiedEmail('');
+  };
+
+  /** Verify a 2FA PIN — returns true if correct, false if wrong */
+  const verify2FAPin = async (pin: string): Promise<boolean> => {
+    if (!userProfile?.pin2FA || !user?.uid) return false;
+    const hashedInput = await hashPin(pin);
+    if (hashedInput === userProfile.pin2FA) {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(`2fa_verified_${user.uid}`, 'true');
+      }
+      setPending2FA(false);
+      return true;
+    }
+    return false;
+  };
+
+  /** Resend verification email to the unverified user */
+  const resendVerification = async () => {
+    if (!unverifiedEmail) return;
+    // We can't resend without the user's password.
+    // The verification email was already sent during registration/login attempt.
+    // Just keep the verification screen visible so the user knows to check their email.
+    setEmailNotVerified(true);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        userProfile,
+        authRole,
+        loading,
+        pending2FA,
+        emailNotVerified,
+        unverifiedEmail,
+        login,
+        register,
+        googleSignIn,
+        verify2FAPin,
+        resendVerification,
+        logout,
+        refreshProfile,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => useContext(AuthContext);

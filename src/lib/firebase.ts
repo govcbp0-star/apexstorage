@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getDatabase } from 'firebase/database';
+import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getDatabase, type Database } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -13,6 +13,46 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getDatabase(app);
+let _app: FirebaseApp | null = null;
+let _auth: Auth | null = null;
+let _db: Database | null = null;
+
+function getApp(): FirebaseApp {
+  if (!_app) {
+    _app = initializeApp(firebaseConfig);
+  }
+  return _app;
+}
+
+function getAuthInstance(): Auth {
+  if (!_auth) {
+    _auth = getAuth(getApp());
+  }
+  return _auth;
+}
+
+function getDbInstance(): Database {
+  if (!_db) {
+    _db = getDatabase(getApp());
+  }
+  return _db;
+}
+
+// Lazy proxies — defer initialization until first property access at runtime.
+// This prevents `auth/invalid-api-key` during `next build` (Collecting page data)
+// when environment variables are not available at build time.
+export const auth = new Proxy({} as Auth, {
+  get(_target, prop) {
+    const instance = getAuthInstance();
+    const value = Reflect.get(instance, prop, instance);
+    return typeof value === 'function' ? (value as Function).bind(instance) : value;
+  },
+}) as Auth;
+
+export const db = new Proxy({} as Database, {
+  get(_target, prop) {
+    const instance = getDbInstance();
+    const value = Reflect.get(instance, prop, instance);
+    return typeof value === 'function' ? (value as Function).bind(instance) : value;
+  },
+}) as Database;

@@ -11,6 +11,7 @@ interface SidebarProps {
   sidebarOpen: boolean;
   onClose: () => void;
   onOpenProfile?: () => void;
+  onChangePassword?: () => void;
   goldSpotPrice?: number;
 }
 
@@ -44,6 +45,7 @@ export default function Sidebar({
   sidebarOpen,
   onClose,
   onOpenProfile,
+  onChangePassword,
   goldSpotPrice,
 }: SidebarProps) {
   const { userProfile, logout } = useAuth();
@@ -87,7 +89,11 @@ export default function Sidebar({
         {/* User info */}
         <div className="px-4 py-3 border-b border-[#212836] flex items-center gap-3">
           <div className="h-9 w-9 overflow-hidden rounded-full border-2 border-[#C9A84C]/45 bg-[#1b212c] shrink-0 flex items-center justify-center gold-gradient">
-            <span className="text-[11px] font-bold text-[#1A1A1E]">{initials}</span>
+            {userProfile?.photoURL ? (
+              <img src={userProfile.photoURL} alt="Profile" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-[11px] font-bold text-[#1A1A1E]">{initials}</span>
+            )}
           </div>
           <div className="min-w-0">
             <p className="text-xs font-semibold text-[#F5F5F5] truncate">{userProfile?.name || 'Member'}</p>
@@ -127,6 +133,17 @@ export default function Sidebar({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 Profile Settings
+              </button>
+            )}
+            {onChangePassword && (
+              <button
+                onClick={() => { onChangePassword(); onClose(); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium text-[#8A8A8E] hover:bg-[#1b212c] hover:text-[#F5F5F5] transition-all"
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                Change Password
               </button>
             )}
             <Link

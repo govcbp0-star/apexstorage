@@ -44,15 +44,15 @@ function getDbInstance(): Database {
 export const auth = new Proxy({} as Auth, {
   get(_target, prop) {
     const instance = getAuthInstance();
-    const value = Reflect.get(instance, prop, instance);
-    return typeof value === 'function' ? (value as Function).bind(instance) : value;
+    const value = Reflect.get(instance, prop, instance) as unknown;
+    return typeof value === 'function' ? value.bind(instance) : value;
   },
 }) as Auth;
 
 export const db = new Proxy({} as Database, {
   get(_target, prop) {
     const instance = getDbInstance();
-    const value = Reflect.get(instance, prop, instance);
-    return typeof value === 'function' ? (value as Function).bind(instance) : value;
+    const value = Reflect.get(instance, prop, instance) as unknown;
+    return typeof value === 'function' ? value.bind(instance) : value;
   },
 }) as Database;

@@ -33,6 +33,7 @@ export interface UserProfile {
   role: 'client' | 'admin';
   status: string;
   vaultLocation: string;
+  photoURL?: string;
   twoFAEnabled?: boolean;
   pin2FA?: string; // hashed PIN stored in RTDB
   createdAt: unknown;
@@ -331,6 +332,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: 'client',
         status: 'active',
         vaultLocation: '',
+        photoURL: cred.user.photoURL || undefined,
         createdAt: new Date().toISOString(),
       };
       await writeProfile(cred.user.uid, fallbackProfile); // best-effort retry
@@ -367,13 +369,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    const profile: UserProfile = {
-      name,
-      email,
-      role,
-      status: 'active',
-      vaultLocation: '',
-      createdAt: new Date().toISOString(),
+      const profile: UserProfile = {
+        name,
+        email,
+        role,
+        status: 'active',
+        vaultLocation: '',
+        photoURL: cred.user.photoURL || undefined,
+        createdAt: new Date().toISOString(),
     };
 
     // Force the fresh auth token to propagate to the RTDB connection before
@@ -463,6 +466,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
         status: 'active',
         vaultLocation: '',
+        photoURL: cred.user.photoURL || undefined,
         createdAt: new Date().toISOString(),
       };
       await writeProfile(cred.user.uid, profile);

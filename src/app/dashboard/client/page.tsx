@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
@@ -9,6 +9,7 @@ import GetVaultModal from '@/components/modals/GetVaultModal';
 import BuyGoldModal from '@/components/modals/BuyGoldModal';
 import ShipmentWizard from '@/components/modals/ShipmentWizard';
 import ProfileSettings from '@/components/modals/ProfileSettings';
+import ChangePasswordModal from '@/components/modals/ChangePasswordModal';
 import { AssetRecord, subscribeToAssets } from '@/lib/assets-service';
 import { Order, subscribeToOrders } from '@/lib/orders-service';
 import { Shipment, subscribeToShipments } from '@/lib/shipments-service';
@@ -17,6 +18,7 @@ import { Transaction, subscribeToTransactions } from '@/lib/transactions-service
 import TransactionHistory from '@/components/TransactionHistory';
 import { formatNumber } from '@/lib/gold-price';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/lib/theme-context';
 
 // Dynamic imports for Chart.js components — avoid SSR canvas issues
 const StorageFeesChart = dynamic(() => import('@/components/charts/StorageFeesChart'), { ssr: false });
@@ -149,6 +151,125 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+type NotificationKind = 'purchase' | 'shipment' | 'vault' | 'payment' | 'asset';
+
+interface ClientNotification {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  description: string;
+  timestamp: string;
+  nav?: string;
+}
+
+function notificationTime(...values: Array<string | undefined>): string {
+  return values.find((value) => value && !Number.isNaN(new Date(value).getTime())) || new Date(0).toISOString();
+}
+
+function buildClientNotifications({
+  assets,
+  orders,
+  shipments,
+  vaultRequests,
+  transactions,
+}: {
+  assets: AssetRecord[];
+  orders: Order[];
+  shipments: Shipment[];
+  vaultRequests: VaultRequest[];
+  transactions: Transaction[];
+}): ClientNotification[] {
+  const notifications: ClientNotification[] = [];
+  const add = (notification: ClientNotification) => notifications.push(notification);
+
+  orders.forEach((order) => {
+    const status = (order.status || 'pending').toLowerCase();
+    const title = status === 'completed'
+      ? 'Gold purchase confirmed'
+      : status === 'cancelled'
+        ? 'Gold purchase cancelled'
+        : `Gold purchase ${status}`;
+    add({
+      id: `order-${order.id}-${status}`,
+      kind: 'purchase',
+      title,
+      description: `${order.quantityGrams || 0}g ${order.productType || 'gold'} order · ${order.vault || 'Vault allocation'}`,
+      timestamp: notificationTime(order.createdAt, order.date),
+      nav: 'orders',
+    });
+  });
+
+  shipments.forEach((shipment) => {
+    const status = (shipment.status || 'pending').toLowerCase();
+    const title = status === 'delivered' || status === 'completed'
+      ? 'Shipment delivered'
+      : `Shipment ${status}`;
+    add({
+      id: `shipment-${shipment.id}-${status}`,
+      kind: 'shipment',
+      title,
+      description: `${shipment.weight || 0}g · ${shipment.deliveryCity || shipment.deliveryCountry || 'Delivery request'}`,
+      timestamp: notificationTime(shipment.createdAt, shipment.date),
+      nav: 'shipments',
+    });
+  });
+
+  vaultRequests.forEach((request) => {
+    const status = (request.status || 'pending').toLowerCase();
+    add({
+      id: `vault-${request.id}-${status}`,
+      kind: 'vault',
+      title: `Vault request ${status}`,
+      description: `${request.quantity || 0}g · ${request.location || 'Vault location'}`,
+      timestamp: notificationTime(request.createdAt, request.date),
+      nav: 'vault',
+    });
+  });
+
+  transactions.forEach((transaction) => {
+    const status = (transaction.paymentStatus || 'pending').toLowerCase();
+    const isPurchase = transaction.type === 'gold_purchase';
+    const subject = isPurchase ? 'Gold purchase' : 'Shipment payment';
+    add({
+      id: `transaction-${transaction.id}-${status}`,
+      kind: 'payment',
+      title: `${subject} ${status}`,
+      description: `$${(transaction.amount || 0).toLocaleString()} · ${transaction.description || 'Payment activity'}`,
+      timestamp: notificationTime(transaction.updatedAt, transaction.createdAt),
+      nav: 'transactions',
+    });
+  });
+
+  assets.forEach((asset) => {
+    add({
+      id: `asset-${asset.id}`,
+      kind: 'asset',
+      title: 'Gold added to holdings',
+      description: `${asset.weight || 0}g ${asset.type || 'gold'} · ${asset.vaultLocation || 'Vault storage'}`,
+      timestamp: notificationTime(asset.createdAt),
+      nav: 'holdings',
+    });
+  });
+
+  return notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+function NotificationGlyph({ kind }: { kind: NotificationKind }) {
+  const paths: Record<NotificationKind, string> = {
+    purchase: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    shipment: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+    vault: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1',
+    payment: 'M3 10h18M7 15h.01M11 15h2m-8 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+    asset: 'M12 3v18m9-9H3m15.5-6.5L5.5 18.5m13 0L5.5 5.5',
+  };
+
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d={paths[kind]} />
+    </svg>
+  );
+}
+
 // ── Small presentational primitives ──────────────────────────────────
 function SectionLabel({children, className}: { children: React.ReactNode; className?: string }) {
   return (
@@ -199,7 +320,8 @@ function EmptyState({ icon, title, desc, action }: { icon: React.ReactNode; titl
 
 // ── Main component ───────────────────────────────────────────────────
 export default function ClientDashboard() {
-  const { authRole, userProfile, user, loading: authLoading, pending2FA } = useAuth();
+  const { authRole, userProfile, user, loading: authLoading, pending2FA, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
 
   const [transitionLoading, setTransitionLoading] = useState(true);
@@ -233,6 +355,11 @@ export default function ClientDashboard() {
   const [shipmentOpen, setShipmentOpen] = useState(false);
   const [performanceOpen, setPerformanceOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
 
   // Selected vault location (used by Vault page + Dashboard KPI card)
   const [selectedVaultKey, setSelectedVaultKey] = useState<string>('');
@@ -243,6 +370,39 @@ export default function ClientDashboard() {
     setToast({ visible: true, message, type });
     setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2500);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!user?.uid) {
+        setReadNotificationIds([]);
+        return;
+      }
+
+      try {
+        const stored = localStorage.getItem(`client_notification_read_${user.uid}`);
+        const parsed = stored ? JSON.parse(stored) : [];
+        setReadNotificationIds(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setReadNotificationIds([]);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!notificationOpen && !profileMenuOpen) return;
+
+    const closeMenus = (event: MouseEvent) => {
+      if (!headerMenuRef.current?.contains(event.target as Node)) {
+        setNotificationOpen(false);
+        setProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', closeMenus);
+    return () => document.removeEventListener('mousedown', closeMenus);
+  }, [notificationOpen, profileMenuOpen]);
 
   // Auth check
   useEffect(() => {
@@ -368,10 +528,13 @@ export default function ClientDashboard() {
   useEffect(() => {
     const tick = () => {
       const d = new Date();
-      setDashboardClock(d.toLocaleString('en-GB', {
-        timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-      }) + ' UTC');
+      const date = d.toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+      });
+      const time = d.toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit', hour12: true,
+      });
+      setDashboardClock(`${date}, ${time}`);
     };
     tick();
     const interval = setInterval(tick, 30000);
@@ -536,12 +699,12 @@ export default function ClientDashboard() {
     : 0;
 
   const greeting = (() => {
-    const h = new Date().getUTCHours();
+    const h = new Date().getHours();
     if (h < 12) return 'Good morning';
     if (h < 17) return 'Good afternoon';
     return 'Good evening';
   })();
-  const initials = (userProfile?.name || '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+  const firstName = (userProfile?.name || user?.displayName || 'Member').trim().split(/\s+/).filter(Boolean)[0] || 'Member';
 
   const sectionMeta: Record<string, { label: string; title: string }> = {
     dashboard: { label: 'Overview', title: 'Dashboard' },
@@ -563,9 +726,37 @@ export default function ClientDashboard() {
   // Pending views
   const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'processing');
   const pendingShipments = shipments.filter(s => s.status === 'pending');
+  const notifications = buildClientNotifications({ assets, orders, shipments, vaultRequests: myVaultRequests, transactions });
+  const unreadNotificationCount = notifications.filter((notification) => !readNotificationIds.includes(notification.id)).length;
+
+  const markNotificationRead = (id: string) => {
+    setReadNotificationIds((current) => {
+      if (current.includes(id)) return current;
+      const next = [...current, id].slice(-200);
+      if (user?.uid) localStorage.setItem(`client_notification_read_${user.uid}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const markAllNotificationsRead = () => {
+    const ids = notifications.map((notification) => notification.id).slice(-200);
+    setReadNotificationIds(ids);
+    if (user?.uid) localStorage.setItem(`client_notification_read_${user.uid}`, JSON.stringify(ids));
+  };
+
+  const handleChangePassword = () => {
+    setProfileMenuOpen(false);
+    setChangePasswordOpen(true);
+  };
+
+  const handleSignOut = async () => {
+    setProfileMenuOpen(false);
+    await logout();
+    router.push('/');
+  };
 
   return (
-    <div className="min-h-screen bg-[#0E1014]">
+    <div className="dashboard-scope min-h-screen bg-[#0E1014]">
       {/* ═════════════ Top bar ═════════════ */}
       <nav className="fixed w-full z-50 bg-[#0E1014]/95 backdrop-blur-xl border-b border-[#1c222e]/80">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -587,7 +778,133 @@ export default function ClientDashboard() {
               </div>
             </a>
 
-            <div className="flex items-center gap-2.5 sm:gap-3">
+            <div ref={headerMenuRef} className="relative flex items-center gap-2.5 sm:gap-3">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setNotificationOpen((open) => !open); setProfileMenuOpen(false); }}
+                  className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full border border-[#1c222e] text-[#8A8A8E] hover:text-[#C9A84C] hover:border-[#C9A84C]/35 transition-colors flex items-center justify-center"
+                  aria-label="Notifications"
+                  aria-expanded={notificationOpen}
+                >
+                  <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M15 17H9m9-5V9a6 6 0 10-12 0v3l-2 3h16l-2-3zm-5 8a2.5 2.5 0 01-4-2" />
+                  </svg>
+                  {unreadNotificationCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-[#C9A84C] text-[9px] font-bold text-[#1A1A1E] flex items-center justify-center ring-2 ring-[#0E1014]">
+                      {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                    </span>
+                  )}
+                </button>
+
+                {notificationOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-[#1c222e] bg-[#10141D] shadow-2xl">
+                    <div className="flex items-center justify-between gap-3 border-b border-[#1c222e] px-4 py-3">
+                      <div>
+                        <p className="text-[10px] font-bold tracking-[0.2em] text-[#C9A84C] uppercase">Notifications</p>
+                        <p className="mt-1 text-[10px] text-[#5A5A5E]">Recent account activity</p>
+                      </div>
+                      {unreadNotificationCount > 0 && (
+                        <button type="button" onClick={markAllNotificationsRead} className="text-[9px] text-[#8A8A8E] hover:text-[#C9A84C] transition-colors whitespace-nowrap">
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-[min(24rem,calc(100vh-8rem))] overflow-y-auto custom-scrollbar">
+                      {notifications.length === 0 ? (
+                        <div className="px-4 py-8 text-center">
+                          <p className="text-xs text-[#F5F5F5]">No recent activity</p>
+                          <p className="mt-1 text-[10px] text-[#5A5A5E]">Your account updates will appear here.</p>
+                        </div>
+                      ) : (
+                        notifications.map((notification) => {
+                          const unread = !readNotificationIds.includes(notification.id);
+                          return (
+                            <button
+                              key={notification.id}
+                              type="button"
+                              onClick={() => {
+                                markNotificationRead(notification.id);
+                                setNotificationOpen(false);
+                                if (notification.nav) setActiveNav(notification.nav);
+                              }}
+                              className={cn(
+                                'w-full flex items-start gap-3 px-4 py-3 text-left border-b border-[#1c222e]/70 last:border-b-0 transition-colors hover:bg-[#1b212c]',
+                                unread ? 'bg-[#C9A84C]/[0.035]' : 'bg-transparent',
+                              )}
+                            >
+                              <span className={cn(
+                                'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border',
+                                unread ? 'border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C]' : 'border-[#1c222e] bg-[#0E1014] text-[#5A5A5E]',
+                              )}>
+                                <NotificationGlyph kind={notification.kind} />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-2">
+                                  <span className="truncate text-[11px] font-semibold text-[#F5F5F5]">{notification.title}</span>
+                                  {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C9A84C]" />}
+                                </span>
+                                <span className="mt-1 block text-[10px] leading-relaxed text-[#8A8A8E]">{notification.description}</span>
+                                <span className="mt-1.5 block text-[9px] text-[#5A5A5E] tabular-nums">{new Date(notification.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="h-9 w-9 sm:h-10 sm:w-10 rounded-full border border-[#1c222e] text-[#8A8A8E] hover:text-[#C9A84C] hover:border-[#C9A84C]/35 transition-colors flex items-center justify-center"
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'dark' ? (
+                  <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M12 3v1.5m0 15V21m9-9h-1.5M6.75 12H5.25m15.364-6.364l-1.06 1.06M5.646 18.354l-1.06 1.06m12.728 0l-1.06-1.06M5.646 5.646l-1.06-1.06M12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                  </svg>
+                )}
+              </button>
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setProfileMenuOpen((open) => !open); setNotificationOpen(false); }}
+                  className="h-9 w-9 sm:h-10 sm:w-10 rounded-full border border-[#1c222e] text-[#8A8A8E] hover:text-[#C9A84C] hover:border-[#C9A84C]/35 transition-colors flex items-center justify-center"
+                  aria-label="Profile menu"
+                  aria-expanded={profileMenuOpen}
+                >
+                  <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M20 21a8 8 0 00-16 0m12-13a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </button>
+
+                {profileMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-52 overflow-hidden rounded-lg border border-[#1c222e] bg-[#10141D] py-1 shadow-2xl">
+                    <div className="border-b border-[#1c222e] px-4 py-3">
+                      <p className="truncate text-xs font-semibold text-[#F5F5F5]">{userProfile?.name || 'Member'}</p>
+                      <p className="mt-1 truncate text-[10px] text-[#5A5A5E]">{user?.email || ''}</p>
+                    </div>
+                    <button type="button" onClick={() => { setProfileMenuOpen(false); setProfileOpen(true); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs text-[#8A8A8E] hover:bg-[#1b212c] hover:text-[#F5F5F5] transition-colors">
+                      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426-1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      Profile Settings
+                    </button>
+                    <button type="button" onClick={handleSignOut} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs text-[#8A8A8E] hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-1.5 text-[#8A8A8E] hover:text-[#C9A84C] transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 6h16M4 12h16M4 18h16" /></svg>
               </button>
@@ -603,6 +920,7 @@ export default function ClientDashboard() {
         sidebarOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onOpenProfile={() => setProfileOpen(true)}
+        onChangePassword={handleChangePassword}
         goldSpotPrice={goldSpotPrice}
       />
 
@@ -612,41 +930,24 @@ export default function ClientDashboard() {
       <ShipmentWizard open={shipmentOpen} onClose={() => setShipmentOpen(false)} onToast={showToast} assets={assets.filter(a => a.status === 'active')} goldSpotPrice={goldSpotPrice} />
       <PerformanceChart open={performanceOpen} onClose={() => setPerformanceOpen(false)} priceHistory={priceHistory} labels={priceLabels} currentPrice={goldSpotPrice} />
       <ProfileSettings open={profileOpen} onClose={() => setProfileOpen(false)} onToast={showToast} />
+      <ChangePasswordModal open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} email={user?.email || ''} onToast={showToast} />
       <Toast message={toast.message} type={toast.type} visible={toast.visible} />
 
       {/* ═════════════ Main ═════════════ */}
       <div className="pt-14 pb-10 min-h-screen bg-[#0E1014] lg:ml-64">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
 
-          {/* ── Session header ── */}
+          {/* ── Greeting header ── */}
           <div className="relative overflow-hidden bg-[#10141D] border border-[#1c222e] rounded-lg mt-5 mb-6">
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#C9A84C]/50 to-transparent" />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 sm:p-5">
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                <div className="relative shrink-0">
-                  <div className="relative h-10 w-10 sm:h-12 sm:w-12 rounded-full border-2 border-[#C9A84C]/40 bg-gradient-to-br from-[#D4B96A] to-[#A68A3E] flex items-center justify-center ring-2 ring-[#0E1014]">
-                    <span className="text-xs sm:text-sm font-bold text-[#1A1A1E]">{initials}</span>
-                  </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-500 ring-2 ring-[#10141D]">
-                    <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none"><path d="M10 3L4.5 8.5 2 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.25em] text-[#5A5A5E] uppercase">Session</span>
-                    <span className="w-1 h-1 rounded-full bg-[#3A3A3E]" />
-                    <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.2em] text-emerald-400 uppercase flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" /> Active
-                    </span>
-                  </div>
-                  <p className="text-sm sm:text-base font-semibold text-[#F5F5F5] tracking-tight mt-1.5 truncate">
-                    {greeting}, <span className="text-[#C9A84C]">{userProfile?.name || 'Member'}</span>
-                  </p>
-                </div>
+              <div className="min-w-0">
+                <p className="text-sm sm:text-base font-medium text-[#F5F5F5] tracking-tight truncate">
+                  {greeting}, <span className="font-semibold text-[#C9A84C]">{firstName}</span>
+                </p>
               </div>
-              <div className="shrink-0 text-left sm:text-right border-t border-[#1c222e]/60 sm:border-0 pt-2.5 sm:pt-0">
-                <p className="text-[7px] sm:text-[8px] font-bold tracking-[0.25em] text-[#5A5A5E] uppercase">UTC · International</p>
-                <p className="text-xs sm:text-sm font-semibold text-[#F5F5F5] font-mono tabular-nums tracking-tight mt-1">{dashboardClock}</p>
+              <div className="shrink-0 text-right border-t border-[#1c222e]/60 sm:border-0 pt-2.5 sm:pt-0">
+                <p className="text-[11px] sm:text-sm font-semibold text-[#F5F5F5] font-mono tabular-nums tracking-tight whitespace-nowrap">{dashboardClock}</p>
               </div>
             </div>
           </div>
@@ -1248,7 +1549,7 @@ function DashboardLoader() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0E1014] flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="dashboard-scope min-h-screen bg-[#0E1014] flex flex-col items-center justify-center relative overflow-hidden">
       <div className="absolute w-[300px] h-[300px] rounded-full bg-[#C9A84C]/5 blur-[120px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
       <div className="flex flex-col items-center z-10 max-w-xs text-center px-4">
         <div className="relative mb-8 animate-pulse">

@@ -358,3 +358,162 @@
   0% { transform: translateY(30px); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
 }
+
+/* ── Light Mode Overrides ─────────────────────────────────────────────
+   Scoped to .dashboard-scope so only the client/admin dashboards are
+   affected; the landing page and auth pages always keep the dark theme.
+   Light palette:
+     canvas    #F4F5F7  (soft gray, not pure white)
+     card      #FFFFFF  (white cards pop against the gray canvas)
+     elevated  #F1F3F6  (hover / raised surfaces)
+     surface   #EEF0F3  (inset panels, table stripes)
+     hairline  #E3E6EB  (borders)
+     ink       #1A1D24  (primary text)
+     muted     #5D6570  (secondary text)
+     muted-2   #8B93A0  (tertiary text)
+   Gold accent (#C9A84C) and status colors are preserved.
+────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --background: #F4F5F7;
+  --foreground: #1A1D24;
+  --card: #FFFFFF;
+  --card-foreground: #1A1D24;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1D24;
+  --secondary: #F1F3F6;
+  --secondary-foreground: #1A1D24;
+  --muted: #F1F3F6;
+  --muted-foreground: #5D6570;
+  --accent: #F1F3F6;
+  --accent-foreground: #1A1D24;
+  --border: #E3E6EB;
+  --input: #E3E6EB;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1A1D24;
+  --sidebar-accent: #F1F3F6;
+  --sidebar-accent-foreground: #1A1D24;
+  --sidebar-border: #E3E6EB;
+}
+
+/* Backgrounds — canvas variants → soft gray */
+[data-theme="light"] .dashboard-scope.bg-\[\#0E1014\],
+[data-theme="light"] .dashboard-scope.bg-\[\#0D1117\],
+[data-theme="light"] .dashboard-scope.bg-\[\#111114\],
+[data-theme="light"] .dashboard-scope.bg-\[\#0b0e14\],
+[data-theme="light"] .dashboard-scope .bg-\[\#0E1014\],
+[data-theme="light"] .dashboard-scope .bg-\[\#0D1117\],
+[data-theme="light"] .dashboard-scope .bg-\[\#111114\],
+[data-theme="light"] .dashboard-scope .bg-\[\#0b0e14\] { background-color: #F4F5F7 !important; }
+[data-theme="light"] .dashboard-scope.bg-\[\#0E1014\]\/95,
+[data-theme="light"] .dashboard-scope.bg-\[\#111114\]\/95,
+[data-theme="light"] .dashboard-scope .bg-\[\#0E1014\]\/95,
+[data-theme="light"] .dashboard-scope .bg-\[\#111114\]\/95 { background-color: rgba(244,245,247,0.95) !important; }
+[data-theme="light"] .dashboard-scope .bg-\[\#0E1014\]\/80 { background-color: rgba(244,245,247,0.8) !important; }
+[data-theme="light"] .dashboard-scope .bg-\[\#0E1014\]\/70 { background-color: rgba(244,245,247,0.7) !important; }
+[data-theme="light"] .dashboard-scope .bg-\[\#0E1014\]\/60 { background-color: rgba(244,245,247,0.6) !important; }
+
+/* Backgrounds — cards → white with a subtle shadow for separation */
+[data-theme="light"] .dashboard-scope .bg-\[\#10141d\],
+[data-theme="light"] .dashboard-scope .bg-\[\#10141D\],
+[data-theme="light"] .dashboard-scope .bg-\[\#161B22\] {
+  background-color: #FFFFFF !important;
+  box-shadow: 0 1px 2px rgba(16,24,40,0.05);
+}
+[data-theme="light"] .dashboard-scope .bg-\[\#161B22\]\/40 { background-color: rgba(255,255,255,0.4) !important; }
+
+/* Backgrounds — elevated / hover surfaces */
+[data-theme="light"] .dashboard-scope .bg-\[\#1b212c\] { background-color: #F1F3F6 !important; }
+[data-theme="light"] .dashboard-scope .bg-\[\#1b212c\]\/50 { background-color: rgba(241,243,246,0.5) !important; }
+[data-theme="light"] .dashboard-scope .bg-\[\#141A24\] { background-color: #EEF0F3 !important; }
+[data-theme="light"] .dashboard-scope .bg-\[\#1c222e\],
+[data-theme="light"] .dashboard-scope .bg-\[\#212836\] { background-color: #EEF0F3 !important; }
+[data-theme="light"] .dashboard-scope .bg-\[\#2A2A2E\] { background-color: #E9ECF0 !important; }
+
+/* Text — ink / muted hierarchy */
+[data-theme="light"] .dashboard-scope .text-\[\#F5F5F5\] { color: #1A1D24 !important; }
+[data-theme="light"] .dashboard-scope .text-\[\#8A8A8E\],
+[data-theme="light"] .dashboard-scope .text-\[\#8B949E\] { color: #5D6570 !important; }
+[data-theme="light"] .dashboard-scope .text-\[\#5A5A5E\],
+[data-theme="light"] .dashboard-scope .text-\[\#B0B0B4\] { color: #8B93A0 !important; }
+
+/* Borders — soft hairlines (incl. opacity variants) */
+[data-theme="light"] .dashboard-scope .border-\[\#1c222e\],
+[data-theme="light"] .dashboard-scope .border-\[\#212836\],
+[data-theme="light"] .dashboard-scope .border-\[\#21262D\],
+[data-theme="light"] .dashboard-scope .border-\[\#2A2A2E\] { border-color: #E3E6EB !important; }
+[data-theme="light"] .dashboard-scope .border-\[\#1c222e\]\/80,
+[data-theme="light"] .dashboard-scope .border-\[\#212836\]\/80 { border-color: rgba(227,230,235,0.8) !important; }
+[data-theme="light"] .dashboard-scope .border-\[\#1c222e\]\/70,
+[data-theme="light"] .dashboard-scope .border-\[\#212836\]\/70 { border-color: rgba(227,230,235,0.7) !important; }
+[data-theme="light"] .dashboard-scope .border-\[\#1c222e\]\/60,
+[data-theme="light"] .dashboard-scope .border-\[\#212836\]\/60,
+[data-theme="light"] .dashboard-scope .border-\[\#21262D\]\/60 { border-color: rgba(227,230,235,0.6) !important; }
+[data-theme="light"] .dashboard-scope .border-\[\#1c222e\]\/40 { border-color: rgba(227,230,235,0.4) !important; }
+[data-theme="light"] .dashboard-scope .border-\[\#2A2A2E\]\/50,
+[data-theme="light"] .dashboard-scope .border-\[\#8B949E\]\/50 { border-color: rgba(93,101,112,0.35) !important; }
+[data-theme="light"] .dashboard-scope .border-\[\#2A2A2E\]\/40 { border-color: rgba(227,230,235,0.9) !important; }
+[data-theme="light"] .dashboard-scope .border-\[\#2A2A2E\]\/30 { border-color: rgba(227,230,235,0.8) !important; }
+
+/* White-alpha overlays → dark-alpha so they read on light surfaces */
+[data-theme="light"] .dashboard-scope .bg-white\/\[0\.015\],
+[data-theme="light"] .dashboard-scope .bg-white\/\[0\.02\] { background-color: rgba(16,24,40,0.02) !important; }
+[data-theme="light"] .dashboard-scope .bg-white\/\[0\.05\] { background-color: rgba(16,24,40,0.04) !important; }
+[data-theme="light"] .dashboard-scope .bg-white\/\[0\.08\] { background-color: rgba(16,24,40,0.06) !important; }
+[data-theme="light"] .dashboard-scope .border-white\/5 { border-color: rgba(16,24,40,0.06) !important; }
+[data-theme="light"] .dashboard-scope .border-white\/10 { border-color: rgba(16,24,40,0.1) !important; }
+[data-theme="light"] .dashboard-scope .border-white\/20 { border-color: rgba(16,24,40,0.2) !important; }
+
+/* Hover states */
+[data-theme="light"] .dashboard-scope .hover\:bg-\[\#1b212c\]:hover,
+[data-theme="light"] .dashboard-scope .hover\:bg-\[\#212836\]:hover { background-color: #F1F3F6 !important; }
+[data-theme="light"] .dashboard-scope .hover\:text-\[\#F5F5F5\]:hover { color: #1A1D24 !important; }
+[data-theme="light"] .dashboard-scope .hover\:border-\[\#8B949E\]:hover { border-color: #C6CDD6 !important; }
+
+/* Rings (avatar / badge outlines should match the surface behind them) */
+[data-theme="light"] .dashboard-scope .ring-\[\#0E1014\],
+[data-theme="light"] .dashboard-scope .ring-\[\#111114\] { --tw-ring-color: #F4F5F7 !important; }
+[data-theme="light"] .dashboard-scope .ring-\[\#111114\]\/80 { --tw-ring-color: rgba(244,245,247,0.8) !important; }
+[data-theme="light"] .dashboard-scope .ring-\[\#10141d\],
+[data-theme="light"] .dashboard-scope .ring-\[\#10141D\] { --tw-ring-color: #FFFFFF !important; }
+
+/* Placeholders */
+[data-theme="light"] .dashboard-scope .placeholder-\[\#8B949E\]::placeholder { color: #8B93A0 !important; }
+
+/* Form controls */
+[data-theme="light"] .dashboard-scope .input-aurum {
+  background-color: #FFFFFF;
+  border-color: #E3E6EB;
+  color: #1A1D24;
+}
+[data-theme="light"] .dashboard-scope .input-aurum::placeholder { color: #8B93A0; }
+[data-theme="light"] .dashboard-scope .input-aurum:focus {
+  border-color: #C9A84C;
+  box-shadow: 0 0 0 1px #C9A84C;
+}
+[data-theme="light"] .dashboard-scope select.input-aurum {
+  background-color: #FFFFFF;
+  color: #1A1D24;
+}
+[data-theme="light"] .dashboard-scope select.input-aurum option {
+  background-color: #FFFFFF;
+  color: #1A1D24;
+}
+[data-theme="light"] .dashboard-scope input:-webkit-autofill.input-aurum,
+[data-theme="light"] .dashboard-scope input:-webkit-autofill:hover.input-aurum,
+[data-theme="light"] .dashboard-scope input:-webkit-autofill:focus.input-aurum {
+  -webkit-text-fill-color: #1A1D24;
+  -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset;
+  caret-color: #1A1D24;
+}
+
+/* Scrollbars */
+[data-theme="light"] .dashboard-scope .custom-scrollbar::-webkit-scrollbar-track { background: #E3E6EB; }
+[data-theme="light"] .dashboard-scope .custom-scrollbar::-webkit-scrollbar-thumb { background: #C9A84C; }
+
+/* Glows — softened for light surfaces */
+[data-theme="light"] .dashboard-scope .gold-glow {
+  box-shadow: 0 0 60px rgba(201,168,76,0.08), 0 0 120px rgba(201,168,76,0.03);
+}
+[data-theme="light"] .dashboard-scope .text-glow {
+  text-shadow: 0 0 40px rgba(201,168,76,0.15);
+}

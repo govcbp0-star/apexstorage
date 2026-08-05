@@ -11,6 +11,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { useChartTheme } from '@/lib/use-chart-theme';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
@@ -20,6 +21,7 @@ interface ReturnsBarProps {
 }
 
 export default function ReturnsBar({ data, labels }: ReturnsBarProps) {
+  const ct = useChartTheme();
   const chartData = {
     labels,
     datasets: [
@@ -44,10 +46,10 @@ export default function ReturnsBar({ data, labels }: ReturnsBarProps) {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#10141d',
-        borderColor: '#1c222e',
+        backgroundColor: ct.tooltipBg,
+        borderColor: ct.tooltipBorder,
         borderWidth: 1,
-        titleColor: '#8A8A8E',
+        titleColor: ct.tooltipTitle,
         bodyColor: '#C9A84C',
         bodyFont: { weight: 'bold' as const },
         padding: 8,
@@ -58,16 +60,16 @@ export default function ReturnsBar({ data, labels }: ReturnsBarProps) {
     },
     scales: {
       x: {
-        ticks: { color: '#8A8A8E', font: { size: 9 } },
-        grid: { color: 'rgba(28, 34, 46, 0.2)' },
-        border: { color: '#1c222e' },
+        ticks: { color: ct.tickColor, font: { size: 9 } },
+        grid: { color: ct.gridColorSoft },
+        border: { color: ct.axisBorder },
       },
       y: {
         suggestedMin: -5,
         suggestedMax: 5,
-        ticks: { color: '#8A8A8E', font: { size: 9 }, callback: (val: string | number) => `${val}%` },
-        grid: { color: 'rgba(28, 34, 46, 0.5)' },
-        border: { color: '#1c222e' },
+        ticks: { color: ct.tickColor, font: { size: 9 }, callback: (val: string | number) => `${val}%` },
+        grid: { color: ct.gridColor },
+        border: { color: ct.axisBorder },
       },
     },
   };

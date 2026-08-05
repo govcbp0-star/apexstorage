@@ -16,6 +16,7 @@ export default function ProfileSettings({ open, onClose, onToast }: ProfileSetti
   const { user, userProfile, refreshProfile } = useAuth();
   const [name, setName] = useState(userProfile?.name || '');
   const [email, setEmail] = useState(userProfile?.email || '');
+  const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || user?.photoURL || '');
 
   // 2FA state
   const [twoFAEnabled, setTwoFAEnabled] = useState(userProfile?.twoFAEnabled || false);
@@ -25,37 +26,78 @@ export default function ProfileSettings({ open, onClose, onToast }: ProfileSetti
   const [currentPin, setCurrentPin] = useState(''); // for disabling 2FA
   const [showDisablePin, setShowDisablePin] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [photoChanged, setPhotoChanged] = useState(false);
 
   // Sync state when profile changes or modal opens
   useEffect(() => {
     if (open && userProfile) {
       setName(userProfile.name || '');
       setEmail(userProfile.email || '');
+      setPhotoURL(userProfile.photoURL || user?.photoURL || '');
       setTwoFAEnabled(userProfile.twoFAEnabled || false);
       setShowPinSetup(false);
       setShowDisablePin(false);
       setNewPin('');
       setConfirmPin('');
       setCurrentPin('');
+      setEditingName(false);
+      setPhotoChanged(false);
     }
-  }, [open, userProfile]);
+  }, [open, user, userProfile]);
 
-  const handleSave = async () => {
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      onToast('Choose an image file', 'error');
+      return;
+    }
+    if (file.size > 512 * 1024) {
+      onToast('Image must be smaller than 512KB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoURL(typeof reader.result === 'string' ? reader.result : '');
+      setPhotoChanged(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSavePhoto = async () => {
+    if (!user?.uid) { onToast('Not authenticated', 'error'); return; }
+    if (!photoURL) { onToast('Select an image first', 'error'); return; }
+
+    setSavingPhoto(true);
+    try {
+      await update(ref(db, `users/${user.uid}`), { photoURL });
+      await refreshProfile();
+      setPhotoChanged(false);
+      onToast('Profile photo updated', 'success');
+    } catch (err) {
+      console.error('[ProfileSettings] Photo save failed:', err);
+      onToast('Failed to update profile photo', 'error');
+    } finally {
+      setSavingPhoto(false);
+    }
+  };
+
+  const handleSaveName = async () => {
     if (name.trim().length < 2) { onToast('Name must be at least 2 characters', 'error'); return; }
     if (!user?.uid) { onToast('Not authenticated', 'error'); return; }
 
     setSaving(true);
     try {
-      const updates: Record<string, string> = {
-        name: name.trim(),
-      };
-      await update(ref(db, `users/${user.uid}`), updates);
+      await update(ref(db, `users/${user.uid}`), { name: name.trim() });
       await refreshProfile();
-      onToast('Profile updated', 'success');
-      onClose();
+      setEditingName(false);
+      onToast('Name updated', 'success');
     } catch (err) {
-      console.error('[ProfileSettings] Save failed:', err);
-      onToast('Failed to update profile', 'error');
+      console.error('[ProfileSettings] Name save failed:', err);
+      onToast('Failed to update name', 'error');
     } finally {
       setSaving(false);
     }
@@ -151,29 +193,67 @@ export default function ProfileSettings({ open, onClose, onToast }: ProfileSetti
 
           <div className="flex items-center gap-3 mb-4 pb-4 border-b border-[#212836]">
             <div className="h-12 w-12 overflow-hidden rounded-full border-2 border-[#C9A84C]/45 bg-[#1b212c] flex items-center justify-center gold-gradient shrink-0">
-              <span className="text-sm font-bold text-[#1A1A1E]">
-                {(name || '?').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2)}
-              </span>
+              {photoURL ? (
+                <img src={photoURL} alt="Profile" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-sm font-bold text-[#1A1A1E]">
+                  {(name || '?').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+                </span>
+              )}
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[#F5F5F5]">{userProfile?.name || 'Member'}</p>
               <p className="text-[10px] text-[#8A8A8E] tracking-wide uppercase">{userProfile?.role || 'client'}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <label className="cursor-pointer text-[10px] text-[#C9A84C] hover:underline">
+                  {photoURL ? 'Change photo' : 'Upload photo'}
+                  <input type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
+                </label>
+                {photoChanged && (
+                  <button
+                    onClick={handleSavePhoto}
+                    disabled={savingPhoto}
+                    className="text-[10px] text-[#C9A84C] font-bold hover:underline disabled:opacity-50"
+                  >
+                    {savingPhoto ? 'Saving...' : 'Save Photo'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="space-y-3">
             <div>
-              <label className="block text-[9px] font-bold tracking-[0.15em] text-[#8A8A8E] uppercase mb-1">Full Name</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-aurum" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[9px] font-bold tracking-[0.15em] text-[#8A8A8E] uppercase">Full Name</label>
+                {!editingName ? (
+                  <button type="button" onClick={() => setEditingName(true)} className="text-[9px] text-[#C9A84C] hover:underline font-bold tracking-wide">
+                    Edit
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => { setEditingName(false); setName(userProfile?.name || ''); }} className="text-[9px] text-[#8A8A8E] hover:underline font-bold tracking-wide">
+                    Cancel
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input-aurum"
+                readOnly={!editingName}
+              />
             </div>
             <div>
               <label className="block text-[9px] font-bold tracking-[0.15em] text-[#8A8A8E] uppercase mb-1">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-aurum" disabled />
               <p className="text-[9px] text-[#8A8A8E] mt-0.5">Email cannot be changed</p>
             </div>
-            <button onClick={handleSave} disabled={saving} className="w-full btn-gold text-xs mt-2">
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
+            {editingName && (
+              <button onClick={handleSaveName} disabled={saving} className="w-full btn-gold text-xs mt-2">
+                {saving ? 'Saving...' : 'Save Name'}
+              </button>
+            )}
           </div>
 
           {/* ── 2FA Section (All Users) ── */}

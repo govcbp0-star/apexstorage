@@ -7,6 +7,7 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import { useChartTheme } from '@/lib/use-chart-theme';
 
 ChartJS.register(ArcElement, Tooltip);
 
@@ -17,6 +18,7 @@ interface AllocationDonutProps {
 }
 
 export default function AllocationDonut({ bars, coins, jewellery }: AllocationDonutProps) {
+  const ct = useChartTheme();
   const total = bars + coins + jewellery;
   const hasData = total > 0;
   const barPct = total > 0 ? Math.round((bars / total) * 100) : 0;
@@ -29,8 +31,8 @@ export default function AllocationDonut({ bars, coins, jewellery }: AllocationDo
         data: hasData ? [bars, coins, jewellery] : [1, 1, 1],
         backgroundColor: hasData
           ? ['#C9A84C', '#38BDF8', '#A855F7']
-          : ['#161e2b', '#212c3f', '#2c3c56'],
-        borderColor: '#10141d',
+          : ct.emptyColors,
+        borderColor: ct.donutBorder,
         borderWidth: 3,
       },
     ],
@@ -44,11 +46,11 @@ export default function AllocationDonut({ bars, coins, jewellery }: AllocationDo
       legend: { display: false },
       tooltip: {
         enabled: hasData,
-        backgroundColor: '#10141d',
-        borderColor: '#1c222e',
+        backgroundColor: ct.tooltipBg,
+        borderColor: ct.tooltipBorder,
         borderWidth: 1,
-        titleColor: '#8A8A8E',
-        bodyColor: '#F5F5F5',
+        titleColor: ct.tooltipTitle,
+        bodyColor: ct.tooltipBody,
         bodyFont: { weight: 'bold' as const },
         padding: 8,
       },

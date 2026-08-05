@@ -12,6 +12,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { useChartTheme } from '@/lib/use-chart-theme';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler);
 
@@ -25,6 +26,7 @@ interface PerformanceChartProps {
 
 export default function PerformanceChart({ open, onClose, priceHistory, labels, currentPrice }: PerformanceChartProps) {
   const chartRef = useRef<ChartJS<'Line'>>(null);
+  const ct = useChartTheme();
 
   useEffect(() => {
     return () => {
@@ -68,10 +70,10 @@ export default function PerformanceChart({ open, onClose, priceHistory, labels, 
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#10141d',
-        borderColor: '#1c222e',
+        backgroundColor: ct.tooltipBg,
+        borderColor: ct.tooltipBorder,
         borderWidth: 1,
-        titleColor: '#8A8A8E',
+        titleColor: ct.tooltipTitle,
         bodyColor: '#C9A84C',
         bodyFont: { weight: 'bold' as const },
         padding: 10,
@@ -83,20 +85,20 @@ export default function PerformanceChart({ open, onClose, priceHistory, labels, 
     },
     scales: {
       x: {
-        ticks: { color: '#8A8A8E', font: { size: 9 }, maxTicksLimit: 6 },
-        grid: { color: 'rgba(28, 34, 46, 0.5)' },
-        border: { color: '#1c222e' },
+        ticks: { color: ct.tickColor, font: { size: 9 }, maxTicksLimit: 6 },
+        grid: { color: ct.gridColor },
+        border: { color: ct.axisBorder },
       },
       y: {
         min: sampledPrices.length > 0 ? Math.floor(Math.min(...sampledPrices) * 0.99) : undefined,
         max: sampledPrices.length > 0 ? Math.ceil(Math.max(...sampledPrices) * 1.01) : undefined,
         ticks: {
-          color: '#8A8A8E',
+          color: ct.tickColor,
           font: { size: 9 },
           callback: (val: string | number) => `$${Number(val).toLocaleString()}`,
         },
-        grid: { color: 'rgba(28, 34, 46, 0.5)' },
-        border: { color: '#1c222e' },
+        grid: { color: ct.gridColor },
+        border: { color: ct.axisBorder },
       },
     },
     interaction: { intersect: false, mode: 'index' as const },

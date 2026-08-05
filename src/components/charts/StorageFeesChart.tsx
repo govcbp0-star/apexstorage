@@ -9,6 +9,7 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { useChartTheme } from '@/lib/use-chart-theme';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -18,6 +19,7 @@ interface StorageFeesChartProps {
 }
 
 export default function StorageFeesChart({ months, amounts }: StorageFeesChartProps) {
+  const ct = useChartTheme();
   const hasData = amounts.length > 0 && amounts.some(v => v !== 0);
 
   const data = {
@@ -38,10 +40,10 @@ export default function StorageFeesChart({ months, amounts }: StorageFeesChartPr
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#10141d',
-        borderColor: '#1c222e',
+        backgroundColor: ct.tooltipBg,
+        borderColor: ct.tooltipBorder,
         borderWidth: 1,
-        titleColor: '#8A8A8E',
+        titleColor: ct.tooltipTitle,
         bodyColor: '#C9A84C',
         bodyFont: { weight: 'bold' as const },
         padding: 8,
@@ -52,15 +54,15 @@ export default function StorageFeesChart({ months, amounts }: StorageFeesChartPr
     },
     scales: {
       x: {
-        ticks: { color: '#8A8A8E', font: { size: 9 } },
+        ticks: { color: ct.tickColor, font: { size: 9 } },
         grid: { display: false },
-        border: { color: '#1c222e' },
+        border: { color: ct.axisBorder },
       },
       y: {
         suggestedMax: 100,
-        ticks: { color: '#8A8A8E', font: { size: 9 }, callback: (val: string | number) => `$${val}` },
-        grid: { color: 'rgba(28, 34, 46, 0.5)' },
-        border: { color: '#1c222e' },
+        ticks: { color: ct.tickColor, font: { size: 9 }, callback: (val: string | number) => `$${val}` },
+        grid: { color: ct.gridColor },
+        border: { color: ct.axisBorder },
       },
     },
   };

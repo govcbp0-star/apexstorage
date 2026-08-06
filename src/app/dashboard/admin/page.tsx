@@ -84,7 +84,7 @@ function buildAdminNotifications({
         ? 'Gold purchase cancelled'
         : `Gold purchase ${status}`;
     add({
-      id: `order-${order.id}-${status}`,
+      id: `order-${order.id}`,
       kind: 'purchase',
       title,
       description: `${order.userName || 'Client'} · ${order.quantityGrams || 0}g ${order.productType || 'gold'} · ${order.vault || 'Vault allocation'}`,
@@ -99,7 +99,7 @@ function buildAdminNotifications({
       ? 'Shipment delivered'
       : `Shipment ${status}`;
     add({
-      id: `shipment-${shipment.id}-${status}`,
+      id: `shipment-${shipment.id}`,
       kind: 'shipment',
       title,
       description: `${shipment.userName || 'Client'} · ${shipment.weight || 0}g · ${shipment.deliveryCity || shipment.deliveryCountry || 'Delivery request'}`,
@@ -111,7 +111,7 @@ function buildAdminNotifications({
   vaultRequests.forEach((request) => {
     const status = (request.status || 'pending').toLowerCase();
     add({
-      id: `vault-${request.id}-${status}`,
+      id: `vault-${request.id}`,
       kind: 'vault',
       title: `Vault request ${status}`,
       description: `${request.userName || 'Client'} · ${request.quantity || 0}g · ${request.location || 'Vault location'}`,
@@ -125,7 +125,7 @@ function buildAdminNotifications({
     const isPurchase = transaction.type === 'gold_purchase';
     const subject = isPurchase ? 'Gold purchase' : 'Shipment payment';
     add({
-      id: `transaction-${transaction.id}-${status}`,
+      id: `transaction-${transaction.id}`,
       kind: 'payment',
       title: `${subject} ${status}`,
       description: `$${(transaction.amount || 0).toLocaleString()} · ${transaction.description || 'Payment activity'}`,
@@ -211,6 +211,9 @@ export default function AdminDashboard() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [deletedNotificationIds, setDeletedNotificationIds] = useState<string[]>([]);
+  const [selectedNotificationIds, setSelectedNotificationIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
   const [goldSpotPrice, setGoldSpotPrice] = useState(4744.08);
   const [priceHistory, setPriceHistory] = useState<number[]>([]);
@@ -259,15 +262,21 @@ export default function AdminDashboard() {
     const timer = window.setTimeout(() => {
       if (!user?.uid) {
         setReadNotificationIds([]);
+        setDeletedNotificationIds([]);
         return;
       }
 
       try {
-        const stored = localStorage.getItem(`admin_notification_read_${user.uid}`);
-        const parsed = stored ? JSON.parse(stored) : [];
-        setReadNotificationIds(Array.isArray(parsed) ? parsed : []);
+        const storedRead = localStorage.getItem(`admin_notification_read_${user.uid}`);
+        const parsedRead = storedRead ? JSON.parse(storedRead) : [];
+        setReadNotificationIds(Array.isArray(parsedRead) ? parsedRead : []);
+
+        const storedDeleted = localStorage.getItem(`admin_notification_deleted_${user.uid}`);
+        const parsedDeleted = storedDeleted ? JSON.parse(storedDeleted) : [];
+        setDeletedNotificationIds(Array.isArray(parsedDeleted) ? parsedDeleted : []);
       } catch {
         setReadNotificationIds([]);
+        setDeletedNotificationIds([]);
       }
     }, 0);
 
@@ -524,7 +533,8 @@ export default function AdminDashboard() {
   const firstName = (userProfile?.name || user?.displayName || 'Admin').trim().split(/\s+/).filter(Boolean)[0] || 'Admin';
 
   // Notifications — same behavior as the client dashboard
-  const notifications = buildAdminNotifications({ users, assets, orders, shipments, vaultRequests, transactions, messages });
+  const allNotifications = buildAdminNotifications({ users, assets, orders, shipments, vaultRequests, transactions, messages });
+  const notifications = allNotifications.filter((n) => !deletedNotificationIds.includes(n.id));
   const unreadNotificationCount = notifications.filter((notification) => !readNotificationIds.includes(notification.id)).length;
 
   const markNotificationRead = (id: string) => {
@@ -540,6 +550,41 @@ export default function AdminDashboard() {
     const ids = notifications.map((notification) => notification.id).slice(-200);
     setReadNotificationIds(ids);
     if (user?.uid) localStorage.setItem(`admin_notification_read_${user.uid}`, JSON.stringify(ids));
+  };
+
+  const deleteNotifications = (ids: string[]) => {
+    setDeletedNotificationIds((current) => {
+      const next = [...new Set([...current, ...ids])].slice(-500);
+      if (user?.uid) localStorage.setItem(`admin_notification_deleted_${user.uid}`, JSON.stringify(next));
+      return next;
+    });
+    setSelectedNotificationIds([]);
+    setIsSelectionMode(false);
+  };
+
+  const clearAllNotifications = () => {
+    const ids = notifications.map((n) => n.id);
+    deleteNotifications(ids);
+  };
+
+  const toggleNotificationSelection = (id: string) => {
+    setSelectedNotificationIds((current) =>
+      current.includes(id) ? current.filter((i) => i !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedNotificationIds.length === notifications.length) {
+      setSelectedNotificationIds([]);
+    } else {
+      setSelectedNotificationIds(notifications.map((n) => n.id));
+    }
+  };
+
+  const deleteSelectedNotifications = () => {
+    if (selectedNotificationIds.length > 0) {
+      deleteNotifications(selectedNotificationIds);
+    }
   };
 
   const handleSignOut = async () => {
@@ -807,11 +852,36 @@ export default function AdminDashboard() {
                         <p className="text-[10px] font-bold tracking-[0.2em] text-[#C9A84C] uppercase">Notifications</p>
                         <p className="mt-1 text-[10px] text-[#5A5A5E]">Recent platform activity</p>
                       </div>
-                      {unreadNotificationCount > 0 && (
-                        <button type="button" onClick={markAllNotificationsRead} className="text-[9px] text-[#8A8A8E] hover:text-[#C9A84C] transition-colors whitespace-nowrap">
-                          Mark all read
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {unreadNotificationCount > 0 && !isSelectionMode && (
+                          <button type="button" onClick={markAllNotificationsRead} className="text-[9px] text-[#8A8A8E] hover:text-[#C9A84C] transition-colors whitespace-nowrap">
+                            Mark all read
+                          </button>
+                        )}
+                        {!isSelectionMode && notifications.length > 0 && (
+                          <button type="button" onClick={() => setIsSelectionMode(true)} className="text-[9px] text-[#8A8A8E] hover:text-[#C9A84C] transition-colors whitespace-nowrap">
+                            Select
+                          </button>
+                        )}
+                        {isSelectionMode && (
+                          <>
+                            <button type="button" onClick={toggleSelectAll} className="text-[9px] text-[#8A8A8E] hover:text-[#C9A84C] transition-colors whitespace-nowrap">
+                              {selectedNotificationIds.length === notifications.length ? 'Deselect all' : 'Select all'}
+                            </button>
+                            <button type="button" onClick={deleteSelectedNotifications} disabled={selectedNotificationIds.length === 0} className="text-[9px] text-red-400 hover:text-red-300 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
+                              Delete selected
+                            </button>
+                            <button type="button" onClick={() => { setIsSelectionMode(false); setSelectedNotificationIds([]); }} className="text-[9px] text-[#8A8A8E] hover:text-[#C9A84C] transition-colors whitespace-nowrap">
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                        {!isSelectionMode && notifications.length > 0 && (
+                          <button type="button" onClick={clearAllNotifications} className="text-[9px] text-red-400 hover:text-red-300 transition-colors whitespace-nowrap">
+                            Clear all
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="max-h-[min(24rem,calc(100vh-8rem))] overflow-y-auto custom-scrollbar">
                       {notifications.length === 0 ? (
@@ -822,35 +892,67 @@ export default function AdminDashboard() {
                       ) : (
                         notifications.map((notification) => {
                           const unread = !readNotificationIds.includes(notification.id);
+                          const isSelected = selectedNotificationIds.includes(notification.id);
                           return (
-                            <button
-                              key={notification.id}
-                              type="button"
-                              onClick={() => {
-                                markNotificationRead(notification.id);
-                                setNotificationOpen(false);
-                                if (notification.nav) setActiveNav(notification.nav);
-                              }}
-                              className={cn(
-                                'w-full flex items-start gap-3 px-4 py-3 text-left border-b border-[#1c222e]/70 last:border-b-0 transition-colors hover:bg-[#1b212c]',
-                                unread ? 'bg-[#C9A84C]/[0.035]' : 'bg-transparent',
+                            <div key={notification.id} className="border-b border-[#1c222e]/70 last:border-b-0">
+                              {isSelectionMode ? (
+                                <label className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[#1b212c] cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleNotificationSelection(notification.id)}
+                                    className="mt-1 h-4 w-4 shrink-0 accent-[#C9A84C] border-[#1c222e] bg-[#0E1014] text-[#C9A84C] focus:ring-[#C9A84C]"
+                                  />
+                                  <span className={cn(
+                                    'min-w-0 flex-1',
+                                    unread ? 'bg-[#C9A84C]/[0.035]' : 'bg-transparent',
+                                  )}>
+                                    <span className={cn(
+                                      'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border',
+                                      unread ? 'border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C]' : 'border-[#1c222e] bg-[#0E1014] text-[#5A5A5E]',
+                                    )}>
+                                      <NotificationGlyph kind={notification.kind} />
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="flex items-center gap-2">
+                                        <span className="truncate text-[11px] font-semibold text-[#F5F5F5]">{notification.title}</span>
+                                        {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C9A84C]" />}
+                                      </span>
+                                      <span className="mt-1 block text-[10px] leading-relaxed text-[#8A8A8E]">{notification.description}</span>
+                                      <span className="mt-1.5 block text-[9px] text-[#5A5A5E] tabular-nums">{new Date(notification.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                                    </span>
+                                  </span>
+                                </label>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    markNotificationRead(notification.id);
+                                    setNotificationOpen(false);
+                                    if (notification.nav) setActiveNav(notification.nav);
+                                  }}
+                                  className={cn(
+                                    'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[#1b212c]',
+                                    unread ? 'bg-[#C9A84C]/[0.035]' : 'bg-transparent',
+                                  )}
+                                >
+                                  <span className={cn(
+                                    'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border',
+                                    unread ? 'border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C]' : 'border-[#1c222e] bg-[#0E1014] text-[#5A5A5E]',
+                                  )}>
+                                    <NotificationGlyph kind={notification.kind} />
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="flex items-center gap-2">
+                                      <span className="truncate text-[11px] font-semibold text-[#F5F5F5]">{notification.title}</span>
+                                      {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C9A84C]" />}
+                                    </span>
+                                    <span className="mt-1 block text-[10px] leading-relaxed text-[#8A8A8E]">{notification.description}</span>
+                                    <span className="mt-1.5 block text-[9px] text-[#5A5A5E] tabular-nums">{new Date(notification.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                                  </span>
+                                </button>
                               )}
-                            >
-                              <span className={cn(
-                                'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border',
-                                unread ? 'border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C]' : 'border-[#1c222e] bg-[#0E1014] text-[#5A5A5E]',
-                              )}>
-                                <NotificationGlyph kind={notification.kind} />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="flex items-center gap-2">
-                                  <span className="truncate text-[11px] font-semibold text-[#F5F5F5]">{notification.title}</span>
-                                  {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C9A84C]" />}
-                                </span>
-                                <span className="mt-1 block text-[10px] leading-relaxed text-[#8A8A8E]">{notification.description}</span>
-                                <span className="mt-1.5 block text-[9px] text-[#5A5A5E] tabular-nums">{new Date(notification.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                              </span>
-                            </button>
+                            </div>
                           );
                         })
                       )}

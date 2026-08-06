@@ -2,8 +2,29 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+
+/**
+ * Sends the branded APEXSTORAGE password-reset email via our backend.
+ * Returns a Firebase-style error code so existing error mapping stays intact.
+ */
+async function requestPasswordReset(email: string): Promise<{ code?: string }> {
+  try {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.success) return {};
+    const code = data?.code as string | undefined;
+    if (code === 'user-not-found') return { code: 'auth/user-not-found' };
+    if (code === 'invalid-email') return { code: 'auth/invalid-email' };
+    if (code === 'too-many-requests') return { code: 'auth/too-many-requests' };
+    return { code: 'auth/server-error' };
+  } catch {
+    return { code: 'auth/network-request-failed' };
+  }
+}
 
 interface AuthModalProps {
   open: boolean;
@@ -106,27 +127,19 @@ export default function AuthModal({ open, mode, onClose, onModeChange }: AuthMod
     setResetLoading(true);
     setResetError('');
     setResetMessage('');
-    try {
-      await sendPasswordResetEmail(auth, trimmed);
+    const result = await requestPasswordReset(trimmed);
+    if (!result.code) {
       setResetMessage('Password reset email sent. Check your inbox.');
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        const code = (err as { code?: string }).code;
-        if (code === 'auth/user-not-found') {
-          setResetError('No account found with this email');
-        } else if (code === 'auth/too-many-requests') {
-          setResetError('Too many requests. Please try again later.');
-        } else if (code === 'auth/invalid-email') {
-          setResetError('Invalid email address');
-        } else {
-          setResetError('Failed to send reset email. Try again.');
-        }
-      } else {
-        setResetError('Failed to send reset email. Try again.');
-      }
-    } finally {
-      setResetLoading(false);
+    } else if (result.code === 'auth/user-not-found') {
+      setResetError('No account found with this email');
+    } else if (result.code === 'auth/too-many-requests') {
+      setResetError('Too many requests. Please try again later.');
+    } else if (result.code === 'auth/invalid-email') {
+      setResetError('Invalid email address');
+    } else {
+      setResetError('Failed to send reset email. Try again.');
     }
+    setResetLoading(false);
   };
 
   return (

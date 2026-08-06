@@ -1,9 +1,12 @@
+import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
+import { getAuth, type Auth } from 'firebase-admin/auth';
 import { ref, get } from 'firebase/database';
 import { db } from './firebase';
 
-// Firebase Admin SDK is NOT available in this environment (no service account credentials).
-// Instead, we use the Firebase REST API to read data server-side, with optional ID token auth.
-// This bypasses the need for a service account while still respecting RTDB security rules.
+// ─────────────────────────────────────────────────────────────────────────────
+// RTDB server-side reads via REST API (existing behavior — no service account
+// needed; used by /api/admin/data and /api/client/data route handlers).
+// ─────────────────────────────────────────────────────────────────────────────
 
 const RTDB_BASE = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
 
@@ -51,4 +54,52 @@ export async function readRTDB(path: string, idToken?: string): Promise<Record<s
   } catch {
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Firebase Admin SDK — server-only authentication operations.
+//
+// Used exclusively by Next.js Route Handlers to generate secure
+// authentication links (email verification, password reset).
+// Service account credentials are read from environment variables
+// and are never exposed to the client.
+//
+// Required env vars (from Firebase Console → Project Settings → Service Accounts):
+//   FIREBASE_PROJECT_ID
+//   FIREBASE_CLIENT_EMAIL
+//   FIREBASE_PRIVATE_KEY   (multiline PEM — keep the \n escapes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+let cachedAuth: Auth | null = null;
+
+export function isAdminConfigured(): boolean {
+  return Boolean(
+    process.env.FIREBASE_PROJECT_ID &&
+    process.env.FIREBASE_CLIENT_EMAIL &&
+    process.env.FIREBASE_PRIVATE_KEY
+  );
+}
+
+export function getAdminAuth(): Auth {
+  if (cachedAuth) return cachedAuth;
+
+  if (!isAdminConfigured()) {
+    throw new Error(
+      'Firebase Admin SDK is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY.'
+    );
+  }
+
+  const app: App = getApps().length
+    ? getApps()[0]!
+    : initializeApp({
+        credential: cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          // The private key arrives with literal \n escapes — restore real newlines
+          privateKey: process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+        }),
+      });
+
+  cachedAuth = getAuth(app);
+  return cachedAuth;
 }

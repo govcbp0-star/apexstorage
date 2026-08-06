@@ -4,8 +4,29 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+
+/**
+ * Sends the branded APEXSTORAGE password-reset email via our backend.
+ * Returns a Firebase-style error code so existing error mapping stays intact.
+ */
+async function requestPasswordReset(email: string): Promise<{ code?: string }> {
+  try {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.success) return {};
+    const code = data?.code as string | undefined;
+    if (code === 'user-not-found') return { code: 'auth/user-not-found' };
+    if (code === 'invalid-email') return { code: 'auth/invalid-email' };
+    if (code === 'too-many-requests') return { code: 'auth/too-many-requests' };
+    return { code: 'auth/server-error' };
+  } catch {
+    return { code: 'auth/network-request-failed' };
+  }
+}
 
 export default function LoginPage() {
   const { login, googleSignIn, pending2FA, verify2FAPin, userProfile, logout, emailNotVerified, unverifiedEmail } = useAuth();
@@ -20,6 +41,7 @@ export default function LoginPage() {
   const [pinDigits, setPinDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [pinError, setPinError] = useState('');
   const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const autoVerifyTriggered = useRef(false);
 
   // Track if a login attempt has been made (to distinguish from initial page load)
   const [loginAttempted, setLoginAttempted] = useState(false);
@@ -94,6 +116,16 @@ export default function LoginPage() {
     if (value && index < 5) {
       pinRefs.current[index + 1]?.focus();
     }
+
+    // Auto-verify when all 6 digits are filled and not already verifying.
+    // Pass newDigits directly (not the state) because setPinDigits is async —
+    // reading pinDigits inside the synchronous handleVerifyPin would return
+    // the stale value, missing the digit just typed.
+    const allFilled = newDigits.every((d) => d !== '');
+    if (allFilled && !loading && !autoVerifyTriggered.current) {
+      autoVerifyTriggered.current = true;
+      handleVerifyPin(newDigits.join(''));
+    }
   };
 
   /** Handle PIN backspace */
@@ -105,13 +137,13 @@ export default function LoginPage() {
       setPinDigits(newDigits);
     }
     if (e.key === 'Enter') {
-      handleVerifyPin();
+      handleVerifyPin(pinDigits.join(''));
     }
   };
 
   /** Verify the PIN */
-  const handleVerifyPin = async () => {
-    const pin = pinDigits.join('');
+  const handleVerifyPin = async (pinOverride?: string) => {
+    const pin = pinOverride ?? pinDigits.join('');
     if (pin.length < 4) {
       setPinError('Enter at least 4 digits');
       return;
@@ -127,9 +159,11 @@ export default function LoginPage() {
         setPinError('Incorrect PIN. Try again.');
         setPinDigits(['', '', '', '', '', '']);
         pinRefs.current[0]?.focus();
+        autoVerifyTriggered.current = false;
       }
     } catch {
       setPinError('Verification failed. Try again.');
+      autoVerifyTriggered.current = false;
     } finally {
       setLoading(false);
     }
@@ -139,6 +173,7 @@ export default function LoginPage() {
   const handleCancel2FA = async () => {
     setPinDigits(['', '', '', '', '', '']);
     setPinError('');
+    autoVerifyTriggered.current = false;
     await logout();
     setLoginAttempted(false);
   };
@@ -154,23 +189,19 @@ export default function LoginPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(trimmed)) { setResetError('Enter a valid email'); return; }
 
     setResetLoading(true);
-    try {
-      await sendPasswordResetEmail(auth, trimmed);
+    const result = await requestPasswordReset(trimmed);
+    if (!result.code) {
       setResetMessage(`Password reset link sent to ${trimmed}. Check your inbox.`);
-    } catch (err: unknown) {
-      const code = (err as { code?: string })?.code || '';
-      if (code === 'auth/user-not-found') {
-        setResetError('No account found with this email address.');
-      } else if (code === 'auth/too-many-requests') {
-        setResetError('Too many requests. Please try again later.');
-      } else if (code === 'auth/invalid-email') {
-        setResetError('Invalid email address.');
-      } else {
-        setResetError('Failed to send reset email. Please try again.');
-      }
-    } finally {
-      setResetLoading(false);
+    } else if (result.code === 'auth/user-not-found') {
+      setResetError('No account found with this email address.');
+    } else if (result.code === 'auth/too-many-requests') {
+      setResetError('Too many requests. Please try again later.');
+    } else if (result.code === 'auth/invalid-email') {
+      setResetError('Invalid email address.');
+    } else {
+      setResetError('Failed to send reset email. Please try again.');
     }
+    setResetLoading(false);
   };
 
   // ── 2FA PIN Verification Screen ──
@@ -230,7 +261,7 @@ export default function LoginPage() {
               ))}
             </div>
 
-            <button onClick={handleVerifyPin} disabled={loading} className="w-full btn-gold">
+            <button onClick={() => handleVerifyPin()} disabled={loading} className="w-full btn-gold">
               {loading ? 'Verifying...' : 'VERIFY PIN'}
             </button>
 

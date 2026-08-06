@@ -8,6 +8,18 @@ export default function VerifiedPage() {
   const router = useRouter();
   const [countdown, setCountdown] = useState(5);
 
+  // Fire the branded welcome email once (best-effort, non-blocking)
+  useEffect(() => {
+    const email = window.sessionStorage.getItem('apex_pending_verify_email');
+    if (!email) return;
+    window.sessionStorage.removeItem('apex_pending_verify_email');
+    fetch('/api/auth/welcome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    }).catch(() => {});
+  }, []);
+
   // Auto-redirect to login after 5 seconds
   useEffect(() => {
     if (countdown <= 0) {

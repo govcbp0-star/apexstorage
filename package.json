@@ -5,6 +5,9 @@
   "engines": {
     "node": "24.x"
   },
+  "overrides": {
+    "jose": "5.9.6"
+  },
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",

@@ -1,7 +1,5 @@
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
-import { ref, get } from 'firebase/database';
-import { db } from './firebase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RTDB server-side reads via REST API (existing behavior — no service account
@@ -44,8 +42,19 @@ export async function readRTDB(path: string, idToken?: string): Promise<Record<s
     // Network error or rules block unauthenticated reads
   }
 
-  // Strategy 3: Client SDK (last resort — needs auth context, which server doesn't have)
+  // Strategy 3: Client SDK (last resort — needs auth context, which server doesn't have).
+  // The client SDK is imported LAZILY (and only here) so that merely importing this
+  // server module never pulls the browser-targeted `firebase/database`/`./firebase`
+  // packages into the module graph. On Vercel's serverless runtime that client SDK
+  // fails to load at module scope (every route importing this module 500'd at boot),
+  // so it must stay out of the top-level imports. Strategy 3 itself can never succeed
+  // server-side (there is no auth context) and only ever returns null after the
+  // 5s timeout — the REST strategies above are the real paths.
   try {
+    const [{ ref, get }, { db }] = await Promise.all([
+      import('firebase/database'),
+      import('./firebase'),
+    ]);
     const snap = await Promise.race([
       get(ref(db, path)),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),

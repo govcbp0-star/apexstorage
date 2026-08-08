@@ -1,15 +1,17 @@
-import { Section, Text, Hr, Link } from '@react-email/components';
+import { Section, Text, Link } from '@react-email/components';
 import * as React from 'react';
 
 interface EmailFooterProps {
   supportEmail: string;
+  /** Render the gold wordmark + taglines above the support line (Welcome Email only). */
+  showBrand?: boolean;
 }
 
 /**
- * Shared APEXSTORAGE email footer — brand taglines, support contact
- * and legal line on the deep-black footer band.
+ * Shared APEXSTORAGE email footer — support contact and legal line
+ * on the deep-black footer band. No divider lines.
  */
-export default function EmailFooter({ supportEmail }: EmailFooterProps) {
+export default function EmailFooter({ supportEmail, showBrand = false }: EmailFooterProps) {
   const year = new Date().getFullYear();
 
   return (
@@ -21,35 +23,38 @@ export default function EmailFooter({ supportEmail }: EmailFooterProps) {
         textAlign: 'center' as const,
       }}
     >
+      {showBrand && (
+        <>
+          <Text
+            style={{
+              margin: 0,
+              fontSize: '12px',
+              fontWeight: 700,
+              letterSpacing: '3px',
+              color: '#D4AF37',
+              fontFamily: 'Georgia, "Times New Roman", serif',
+            }}
+          >
+            APEXSTORAGE
+          </Text>
+          <Text
+            style={{
+              margin: '10px 0 0',
+              fontSize: '11px',
+              lineHeight: '18px',
+              color: '#D8D8D8',
+              fontFamily: 'Arial, Helvetica, sans-serif',
+            }}
+          >
+            Premium Precious Metals Storage · Secure Vault Management
+            <br />
+            Global Asset Protection
+          </Text>
+        </>
+      )}
       <Text
         style={{
-          margin: 0,
-          fontSize: '12px',
-          fontWeight: 700,
-          letterSpacing: '3px',
-          color: '#D4AF37',
-          fontFamily: 'Georgia, "Times New Roman", serif',
-        }}
-      >
-        APEXSTORAGE
-      </Text>
-      <Text
-        style={{
-          margin: '10px 0 0',
-          fontSize: '11px',
-          lineHeight: '18px',
-          color: '#D8D8D8',
-          fontFamily: 'Arial, Helvetica, sans-serif',
-        }}
-      >
-        Premium Precious Metals Storage · Secure Vault Management
-        <br />
-        Global Asset Protection
-      </Text>
-      <Hr style={{ border: 'none', borderTop: '1px solid #333333', margin: '20px 0' }} />
-      <Text
-        style={{
-          margin: 0,
+          margin: showBrand ? '20px 0 0' : 0,
           fontSize: '11px',
           lineHeight: '18px',
           color: '#8A8A8E',

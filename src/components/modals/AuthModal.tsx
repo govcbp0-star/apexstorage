@@ -34,7 +34,7 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ open, mode, onClose, onModeChange }: AuthModalProps) {
-  const { login, register, googleSignIn, emailNotVerified, unverifiedEmail, resendVerification } = useAuth();
+  const { login, register, googleSignIn, emailNotVerified, unverifiedEmail, resendVerification, verificationEmailFailed } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,9 +44,7 @@ export default function AuthModal({ open, mode, onClose, onModeChange }: AuthMod
   const [verificationSent, setVerificationSent] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
-  // For resend flow — user re-enters password to get a new verification email
-  const [resendPassword, setResendPassword] = useState('');
-  const [showResendPasswordInput, setShowResendPasswordInput] = useState(false);
+  const [resendError, setResendError] = useState('');
   // Forgot password
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -64,8 +62,7 @@ export default function AuthModal({ open, mode, onClose, onModeChange }: AuthMod
       setVerificationSent(false);
       setResendLoading(false);
       setResendSuccess(false);
-      setResendPassword('');
-      setShowResendPasswordInput(false);
+      setResendError('');
     }
   }, [open]);
 
@@ -142,6 +139,32 @@ export default function AuthModal({ open, mode, onClose, onModeChange }: AuthMod
     setResetLoading(false);
   };
 
+  /** Resend the verification email directly — no password re-entry needed. */
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    setResendError('');
+    setResendSuccess(false);
+    try {
+      await resendVerification();
+      setResendSuccess(true);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'too-many-requests') {
+        setResendError('Too many requests. Please try again later.');
+      } else if (code === 'not-configured') {
+        setResendError('Email service is temporarily unavailable. Please try again later.');
+      } else if (code === 'user-not-found') {
+        setResendError('No account found with this email address.');
+      } else if (code === 'invalid-email') {
+        setResendError('No unverified email address is available. Please sign in again.');
+      } else {
+        setResendError('Failed to resend verification email. Please try again.');
+      }
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -177,71 +200,38 @@ export default function AuthModal({ open, mode, onClose, onModeChange }: AuthMod
                 Please check your inbox and click the verification link to activate your account. You&apos;ll be able to sign in after verifying.
               </p>
 
+              {verificationEmailFailed && (
+                <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-[11px] text-red-400 leading-relaxed">
+                  We couldn&apos;t send the verification email. Click below to resend it — no need to re-enter your password.
+                </div>
+              )}
+
               {resendSuccess && (
                 <div className="mb-3 p-2 bg-green-500/10 border border-green-500/20 rounded text-[11px] text-green-400">
                   Verification email resent successfully!
                 </div>
               )}
 
-              {showResendPasswordInput ? (
-                <div className="space-y-2 mb-3">
-                  <input
-                    type="password"
-                    value={resendPassword}
-                    onChange={(e) => setResendPassword(e.target.value)}
-                    className="input-aurum text-xs"
-                    placeholder="Enter your password"
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!resendPassword || resendPassword.length < 8) return;
-                      setResendLoading(true);
-                      setResendSuccess(false);
-                      try {
-                        // Sign in briefly to trigger verification email resend
-                        await login(unverifiedEmail || email, resendPassword);
-                        // If login succeeds (email was verified), close the modal
-                        setVerificationSent(false);
-                        onClose();
-                      } catch (err: unknown) {
-                        if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') {
-                          // This is expected — the login sent a new verification email and signed out
-                          setResendSuccess(true);
-                          setShowResendPasswordInput(false);
-                          setResendPassword('');
-                        } else {
-                          // Wrong password or other error
-                          setResendSuccess(false);
-                        }
-                      } finally {
-                        setResendLoading(false);
-                      }
-                    }}
-                    disabled={resendLoading || !resendPassword}
-                    className="w-full btn-gold text-xs"
-                  >
-                    {resendLoading ? 'Sending...' : 'Resend Verification Email'}
-                  </button>
+              {resendError && (
+                <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-[11px] text-red-400">
+                  {resendError}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowResendPasswordInput(true)}
-                  disabled={resendLoading}
-                  className="w-full btn-gold-outline text-xs mb-3"
-                >
-                  Resend Verification Email
-                </button>
               )}
+
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resendLoading}
+                className="w-full btn-gold-outline text-xs mb-3"
+              >
+                {resendLoading ? 'Sending...' : 'Resend Verification Email'}
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setVerificationSent(false);
-                  setShowResendPasswordInput(false);
-                  setResendPassword('');
                   setResendSuccess(false);
+                  setResendError('');
                   onModeChange('login');
                 }}
                 className="text-xs text-[#8A8A8E] hover:text-[#C9A84C] transition-colors"

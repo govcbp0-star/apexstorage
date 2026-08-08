@@ -51,7 +51,7 @@ export async function deleteUser(uid: string): Promise<void> {
 }
 
 /** Subscribe to real-time users updates */
-export function subscribeToUsers(callback: (users: UserRecord[]) => void, onError?: (error: Error) => void): () => void {
+export function subscribeToUsers(callback: (users: UserRecord[]) => void, onError?: (error: Error & { code?: string }) => void): () => void {
   const usersRef = ref(db, USERS_PATH);
   const handler = onValue(usersRef, (snapshot) => {
     if (!snapshot.exists()) {
@@ -73,8 +73,9 @@ export function subscribeToUsers(callback: (users: UserRecord[]) => void, onErro
     users.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     callback(users);
   }, (error) => {
-    console.warn('[users-service] RTDB subscription error:', error.code, error.message);
-    if (onError) onError(error);
+    const dbError = error as Error & { code?: string };
+    console.warn('[users-service] RTDB subscription error:', dbError.code, dbError.message);
+    if (onError) onError(dbError);
   });
   return () => off(usersRef, 'value', handler);
 }

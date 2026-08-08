@@ -72,10 +72,10 @@ export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: 
         estimatedTotal: Math.round(estimatedTotal * 100) / 100,
       };
       
-      const orderId = user?.uid + '_' + Date.now();
+      const orderId = `${user?.uid || 'user'}_order_${Date.now()}`;
       
       // 1. Create order record with pending payment status
-      await submitOrder({
+      const savedOrderId = await submitOrder({
         ...orderData,
         orderId,
         paymentMethod: 'crypto',
@@ -97,8 +97,9 @@ export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: 
         cryptoAmount: 0,
         paymentId: '',
         paymentStatus: 'pending',
+        orderId: savedOrderId,
         metadata: {
-          orderId,
+          orderId: savedOrderId,
         },
       });
 
@@ -106,7 +107,7 @@ export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: 
       setCheckoutData({
         amount: orderData.estimatedTotal,
         description,
-        orderId,
+        orderId: savedOrderId,
         initialEmail: user?.email || '',
       });
       setShowCheckout(true);

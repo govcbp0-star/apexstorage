@@ -3,6 +3,8 @@
 import React, { useRef, useEffect } from 'react';
 import {
   Chart as ChartJS,
+  type ChartOptions,
+  type TooltipItem,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -25,7 +27,7 @@ interface PerformanceChartProps {
 }
 
 export default function PerformanceChart({ open, onClose, priceHistory, labels, currentPrice }: PerformanceChartProps) {
-  const chartRef = useRef<ChartJS<'Line'>>(null);
+  const chartRef = useRef<ChartJS<'line'>>(null);
   const ct = useChartTheme();
 
   useEffect(() => {
@@ -64,7 +66,7 @@ export default function PerformanceChart({ open, onClose, priceHistory, labels, 
     ],
   };
 
-  const options = {
+  const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -79,7 +81,10 @@ export default function PerformanceChart({ open, onClose, priceHistory, labels, 
         padding: 10,
         displayColors: false,
         callbacks: {
-          label: (ctx: { parsed: { y: number } }) => `$${ctx.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          label: (ctx: TooltipItem<'line'>) => {
+            const value = ctx.parsed.y ?? 0;
+            return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+          },
         },
       },
     },

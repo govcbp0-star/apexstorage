@@ -2,8 +2,6 @@ import { Section, Text } from '@react-email/components';
 import * as React from 'react';
 import EmailLayout from './layout';
 import EmailButton from './components/Button';
-import EmailDivider from './components/Divider';
-import SecurityNotice from './components/SecurityNotice';
 
 interface VerifyEmailProps {
   verificationUrl: string;
@@ -54,22 +52,6 @@ export default function VerifyEmail({ verificationUrl, supportEmail }: VerifyEma
 
       <EmailButton href={verificationUrl}>Verify Email</EmailButton>
 
-      <Section style={{ padding: '0 40px' }}>
-        <Text
-          style={{
-            margin: '18px 0 0',
-            fontSize: '11px',
-            lineHeight: '18px',
-            color: '#8A8A8E',
-            textAlign: 'center' as const,
-          }}
-        >
-          This verification link expires according to Firebase&apos;s secure verification settings.
-        </Text>
-      </Section>
-
-      <EmailDivider />
-      <SecurityNotice />
     </EmailLayout>
   );
 }

@@ -174,7 +174,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
         const assetValueInUSD = (weight / 31.1035) * effectiveGoldPrice;
         const shipmentFee = Math.ceil(assetValueInUSD * 0.0025); // 0.25% fee, rounded up to nearest whole number
 
-        const shipmentId = (user?.uid || 'user') + '_shipment_' + Date.now();
+        const shipmentId = `${user?.uid || 'user'}_shipment_${Date.now()}`;
 
         const shipmentData = {
           userName: userProfile?.name || user?.displayName || user?.email?.split('@')[0] || 'Unknown',
@@ -198,7 +198,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
         };
 
         // 1. Create shipment record with pending payment status
-        await submitShipment(shipmentData);
+        const savedShipmentId = await submitShipment(shipmentData);
 
         const description = `Shipment: ${shipmentData.deliveryCity}, ${shipmentData.deliveryCountry}`;
 
@@ -215,8 +215,9 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
           cryptoAmount: 0,
           paymentId: '',
           paymentStatus: 'pending',
+          shipmentId: savedShipmentId,
           metadata: {
-            orderId: shipmentId,
+            orderId: savedShipmentId,
           },
         });
 
@@ -224,7 +225,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
         setCheckoutData({
           amount: shipmentFee || 50,
           description,
-          orderId: shipmentId,
+          orderId: savedShipmentId,
           initialEmail: user?.email || '',
         });
         setShowCheckout(true);

@@ -505,12 +505,12 @@ export default function AdminDashboard() {
         if (data.error) return;
         if (mounted) {
           // Always update from API — it's the most reliable source for admin
-          if (data.users?.length > 0) setUsers(data.users);
-          if (data.assets?.length > 0) setAssets(data.assets);
-          if (data.messages?.length > 0) setMessages(data.messages);
-          if (data.vaultRequests?.length > 0) setVaultRequests(data.vaultRequests);
-          if (data.orders?.length > 0) setOrders(data.orders);
-          if (data.shipments?.length > 0) setShipments(data.shipments);
+          if (Array.isArray(data.users)) setUsers(data.users);
+          if (Array.isArray(data.assets)) setAssets(data.assets);
+          if (Array.isArray(data.messages)) setMessages(data.messages);
+          if (Array.isArray(data.vaultRequests)) setVaultRequests(data.vaultRequests);
+          if (Array.isArray(data.orders)) setOrders(data.orders);
+          if (Array.isArray(data.shipments)) setShipments(data.shipments);
           if (Array.isArray(data.newsletterSubscribers)) setNewsletterSubs(data.newsletterSubscribers);
         }
       } catch {
@@ -605,7 +605,10 @@ export default function AdminDashboard() {
     if (!userForm.name.trim() || !userForm.email.trim()) { showToast('Name and email required', 'error'); return; }
     try {
       if (editMode && editId) {
-        await updateUserRTDB(editId, userForm);
+        await updateUserRTDB(editId, {
+          ...userForm,
+          role: userForm.role as 'client' | 'admin',
+        });
         showToast('User updated', 'success');
       } else {
         showToast('New users must register through the sign-up page', 'info');
@@ -791,8 +794,26 @@ export default function AdminDashboard() {
   const saveVaultRequest = () => {
     if (!vaultFormAdmin.location || !vaultFormAdmin.type || !vaultFormAdmin.userId) { showToast('All fields required', 'error'); return; }
     const user = users.find(u => u.id === vaultFormAdmin.userId);
-    const newId = String(Math.max(...vaultRequests.map(v => parseInt(v.id)), 0) + 1);
-    setVaultRequests(prev => [...prev, { id: newId, userName: user?.name || 'Unknown', userId: vaultFormAdmin.userId, type: vaultFormAdmin.type, location: vaultFormAdmin.location, status: 'approved', date: new Date().toISOString().split('T')[0] }]);
+    const now = new Date();
+    const newRequest: VaultRequest = {
+      id: `local-${now.getTime()}`,
+      userName: user?.name || 'Unknown',
+      userId: vaultFormAdmin.userId,
+      userEmail: user?.email || '',
+      location: vaultFormAdmin.location,
+      quantity: 0,
+      storageType: vaultFormAdmin.type,
+      shippingAddress: '',
+      city: '',
+      state: '',
+      postcode: '',
+      country: '',
+      notes: vaultFormAdmin.notes,
+      status: 'approved',
+      date: now.toISOString().split('T')[0],
+      createdAt: now.toISOString(),
+    };
+    setVaultRequests(prev => [...prev, newRequest]);
     setVaultModalOpen(false);
     showToast('Vault created successfully', 'success');
   };

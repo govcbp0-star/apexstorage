@@ -2,8 +2,7 @@ import { Section, Text } from '@react-email/components';
 import * as React from 'react';
 import EmailLayout from './layout';
 import EmailButton from './components/Button';
-import EmailDivider from './components/Divider';
-import SecurityNotice from './components/SecurityNotice';
+import EmailFooter from './components/Footer';
 
 interface WelcomeEmailProps {
   name: string;
@@ -17,6 +16,7 @@ export default function WelcomeEmail({ name, dashboardUrl, supportEmail }: Welco
       preview="Welcome to APEXSTORAGE"
       supportEmail={supportEmail}
       headerSubtitle="SECURE ACCOUNT"
+      footer={<EmailFooter supportEmail={supportEmail} showBrand />}
     >
       <Section style={{ padding: '8px 40px 0' }}>
         <Text
@@ -65,10 +65,12 @@ export default function WelcomeEmail({ name, dashboardUrl, supportEmail }: Welco
         </Text>
       </Section>
 
-      <EmailButton href={dashboardUrl}>Go to Dashboard</EmailButton>
+      {/* The dashboard CTA is only rendered when a real public https URL is
+          configured — outbound email must never contain localhost/dev links
+          (mailbox providers spam-classify them). In dev the button is simply
+          omitted and the email still stands alone with its support footer. */}
+      {dashboardUrl && <EmailButton href={dashboardUrl}>Go to Dashboard</EmailButton>}
 
-      <EmailDivider />
-      <SecurityNotice />
     </EmailLayout>
   );
 }

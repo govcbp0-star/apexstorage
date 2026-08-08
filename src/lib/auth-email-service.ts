@@ -1,7 +1,7 @@
 import { render } from '@react-email/render';
 import * as React from 'react';
 import { getAdminAuth, isAdminConfigured } from '@/lib/firebase-admin';
-import { getResend, EMAIL_FROM, REPLY_TO, SUPPORT_EMAIL, APP_URL } from '@/lib/resend';
+import { assertEmailConfig, getAppUrl, getResend, isPublicWebUrl, EMAIL_FROM, REPLY_TO, SUPPORT_EMAIL } from '@/lib/resend';
 import VerifyEmail from '@/lib/email/verify-email';
 import ResetPasswordEmail from '@/lib/email/reset-password';
 import WelcomeEmail from '@/lib/email/welcome';
@@ -35,8 +35,22 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 function mapError(err: unknown): AuthEmailResult {
   const code = (err as { code?: string })?.code || '';
   const message = (err as { message?: string })?.message || '';
+  // The Admin SDK wraps server responses — the real Firebase error message
+  // (e.g. TOO_MANY_ATTEMPTS_TRY_LATER) is nested in err.cause.response.data
+  // .error.message while err.message is just the generic "An internal error
+  // has occurred."
+  const causeMessage =
+    (err as { cause?: { response?: { data?: { error?: { message?: string } } } } })?.cause?.response?.data?.error?.message ||
+    '';
 
-  if (message.includes('not configured')) {
+  if (
+    message.includes('not configured') ||
+    message.includes('configured correctly') ||
+    message.includes('APP_URL is invalid') ||
+    message.includes('EMAIL_FROM') ||
+    message.includes('SUPPORT_EMAIL') ||
+    message.includes('REPLY_TO')
+  ) {
     return { success: false, code: 'not-configured', message: 'Email service is not configured.' };
   }
   if (code === 'auth/user-not-found') {
@@ -45,7 +59,11 @@ function mapError(err: unknown): AuthEmailResult {
   if (code === 'auth/invalid-email') {
     return { success: false, code: 'invalid-email', message: 'Invalid email address.' };
   }
-  if (code === 'auth/too-many-requests') {
+  // Firebase surfaces its verification-link rate limit as auth/internal-error
+  // with TOO_MANY_ATTEMPTS_TRY_LATER in the message (the Admin SDK does not
+  // map it to auth/too-many-requests). Recognize it so the UI can show the
+  // friendly "try again later" message instead of a generic failure.
+  if (code === 'auth/too-many-requests' || message.includes('TOO_MANY_ATTEMPTS_TRY_LATER') || causeMessage.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
     return { success: false, code: 'too-many-requests', message: 'Too many requests. Please try again later.' };
   }
   return { success: false, code: 'server-error', message: 'Failed to send email. Please try again.' };
@@ -53,7 +71,7 @@ function mapError(err: unknown): AuthEmailResult {
 
 async function deliver(to: string, subject: string, html: string): Promise<AuthEmailResult> {
   const resend = getResend();
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     replyTo: REPLY_TO,
     to,
@@ -61,9 +79,14 @@ async function deliver(to: string, subject: string, html: string): Promise<AuthE
     html,
   });
   if (error) {
-    console.error('[AuthEmail] Resend delivery failed:', error);
+    console.error('[AuthEmail] Resend delivery failed:', { to, subject, error });
     return { success: false, code: 'server-error', message: 'Failed to send email. Please try again.' };
   }
+  if (!data?.id) {
+    console.error('[AuthEmail] Resend returned no message id:', { to, subject, data });
+    return { success: false, code: 'server-error', message: 'Failed to send email. Please try again.' };
+  }
+  console.info('[AuthEmail] Resend accepted email:', { to, subject, id: data.id });
   return { success: true, message: 'Email sent successfully.' };
 }
 
@@ -72,6 +95,12 @@ function validateRequest(email: string): AuthEmailResult | null {
     return { success: false, code: 'invalid-email', message: 'Invalid email address.' };
   }
   if (!isAdminConfigured()) {
+    return { success: false, code: 'not-configured', message: 'Email service is not configured.' };
+  }
+  try {
+    assertEmailConfig();
+  } catch (err) {
+    console.error('[AuthEmail] Configuration validation failed:', err);
     return { success: false, code: 'not-configured', message: 'Email service is not configured.' };
   }
   return null;
@@ -86,10 +115,18 @@ export async function sendVerificationEmail(email: string): Promise<AuthEmailRes
     const adminAuth = getAdminAuth();
     // Ensures the account exists — throws auth/user-not-found otherwise
     await adminAuth.getUserByEmail(email);
+    const continueUrl = `${getAppUrl()}/auth/verified`;
+    // handleCodeInApp: true — the link lands on /auth/verified with
+    // ?mode=verifyEmail&oobCode=... and the app itself applies the code via
+    // POST /api/auth/verify-code (which calls Firebase's REST API, the same
+    // operation applyActionCode performs). This lets the app ALWAYS know the
+    // verified email (any device/browser) and reliably send the branded
+    // welcome email.
     const link = await adminAuth.generateEmailVerificationLink(email, {
-      url: `${APP_URL}/auth/verified`,
-      handleCodeInApp: false,
+      url: continueUrl,
+      handleCodeInApp: true,
     });
+    console.info('[AuthEmail] Firebase verification link generated:', { email, continueUrl });
     const html = await render(
       React.createElement(VerifyEmail, { verificationUrl: link, supportEmail: SUPPORT_EMAIL })
     );
@@ -110,12 +147,28 @@ export async function sendPasswordResetEmailLink(email: string): Promise<AuthEma
   try {
     const adminAuth = getAdminAuth();
     await adminAuth.getUserByEmail(email);
+    const continueUrl = `${getAppUrl()}/auth/reset-password`;
+    // The Admin SDK generates the link against Firebase's HOSTED action
+    // handler (firebaseapp.com/__/auth/action). That hosted page renders its
+    // OWN white "reset password" UI for mode=resetPassword instead of
+    // redirecting to the app (observed in the served action.js and in real
+    // browser tests), so the emailed link must point DIRECTLY at the branded
+    // in-app reset page instead. The oobCode below is still Firebase-issued
+    // and validated server-side via accounts:resetPassword — the same
+    // operation confirmPasswordReset() performs — so this changes only the
+    // URL that carries the code, never the security of the reset itself.
     const link = await adminAuth.generatePasswordResetLink(email, {
-      url: `${APP_URL}/auth/login`,
-      handleCodeInApp: false,
+      url: continueUrl,
+      handleCodeInApp: true,
     });
+    const oobCode = new URL(link).searchParams.get('oobCode') || '';
+    if (!oobCode) {
+      throw new Error('Firebase password-reset link did not contain an oobCode.');
+    }
+    const resetUrl = `${getAppUrl()}/auth/reset-password?mode=resetPassword&oobCode=${encodeURIComponent(oobCode)}`;
+    console.info('[AuthEmail] Firebase password reset link generated:', { email, continueUrl });
     const html = await render(
-      React.createElement(ResetPasswordEmail, { resetUrl: link, supportEmail: SUPPORT_EMAIL })
+      React.createElement(ResetPasswordEmail, { resetUrl, supportEmail: SUPPORT_EMAIL })
     );
     const result = await deliver(email, 'Reset Your APEXSTORAGE Password', html);
     if (result.success) result.message = 'Password reset email sent successfully.';
@@ -132,10 +185,17 @@ export async function sendWelcomeEmail(email: string, name: string): Promise<Aut
   if (invalid) return invalid;
 
   try {
+    // NEVER embed a development/private URL in an outbound email — mailbox
+    // providers classify messages linking to localhost/private hosts as spam
+    // (this was the exact difference from the verification/reset emails that
+    // reach the inbox). When APP_URL is not a real public https URL (e.g. the
+    // local dev server), omit the dashboard CTA rather than send a dev link.
+    const appUrl = getAppUrl();
+    const dashboardUrl = isPublicWebUrl(appUrl) ? `${appUrl}/dashboard/client` : '';
     const html = await render(
       React.createElement(WelcomeEmail, {
         name,
-        dashboardUrl: `${APP_URL}/dashboard/client`,
+        dashboardUrl,
         supportEmail: SUPPORT_EMAIL,
       })
     );
@@ -146,4 +206,21 @@ export async function sendWelcomeEmail(email: string, name: string): Promise<Aut
     console.error('[AuthEmail] sendWelcomeEmail failed:', err);
     return mapError(err);
   }
+}
+
+/**
+ * Record that the welcome email has been delivered for a user.
+ *
+ * Stored as a Firebase custom claim (`welcomeSent`) so the idempotent
+ * ensure-welcome fallback can never double-send. Claims are written via the
+ * Admin SDK — no RTDB permission rules involved and no extra env config.
+ * Best-effort: if this fails the welcome was still delivered; the only
+ * downside is a possible duplicate on a later fallback attempt.
+ */
+export async function markWelcomeSent(uid: string): Promise<void> {
+  const adminAuth = getAdminAuth();
+  const user = await adminAuth.getUser(uid);
+  const claims = user.customClaims || {};
+  if (claims.welcomeSent === true) return;
+  await adminAuth.setCustomUserClaims(uid, { ...claims, welcomeSent: true });
 }

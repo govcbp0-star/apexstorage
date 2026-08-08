@@ -73,7 +73,7 @@ export async function fetchAssets(): Promise<AssetRecord[]> {
 }
 
 /** Subscribe to real-time assets updates */
-export function subscribeToAssets(callback: (assets: AssetRecord[]) => void, onError?: (error: Error) => void): () => void {
+export function subscribeToAssets(callback: (assets: AssetRecord[]) => void, onError?: (error: Error & { code?: string }) => void): () => void {
   const assetsRef = ref(db, ASSETS_PATH);
   const handler = onValue(assetsRef, (snapshot) => {
     if (!snapshot.exists()) {
@@ -86,8 +86,9 @@ export function subscribeToAssets(callback: (assets: AssetRecord[]) => void, onE
     assets.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     callback(assets);
   }, (error) => {
-    console.warn('[assets-service] RTDB subscription error:', error.code, error.message);
-    if (onError) onError(error);
+    const dbError = error as Error & { code?: string };
+    console.warn('[assets-service] RTDB subscription error:', dbError.code, dbError.message);
+    if (onError) onError(dbError);
   });
   return () => off(assetsRef, 'value', handler);
 }

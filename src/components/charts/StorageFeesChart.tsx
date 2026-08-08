@@ -3,6 +3,8 @@
 import React from 'react';
 import {
   Chart as ChartJS,
+  type ChartOptions,
+  type TooltipItem,
   CategoryScale,
   LinearScale,
   BarElement,
@@ -34,7 +36,7 @@ export default function StorageFeesChart({ months, amounts }: StorageFeesChartPr
     ],
   };
 
-  const options = {
+  const options: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -48,7 +50,7 @@ export default function StorageFeesChart({ months, amounts }: StorageFeesChartPr
         bodyFont: { weight: 'bold' as const },
         padding: 8,
         callbacks: {
-          label: (ctx: { parsed: { y: number } }) => `$${ctx.parsed.y}`,
+          label: (ctx: TooltipItem<'bar'>) => `$${ctx.parsed.y ?? 0}`,
         },
       },
     },

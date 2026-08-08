@@ -13,6 +13,9 @@ export interface Order {
   vault: string;
   estimatedTotal: number;
   status: string; // pending | processing | completed | cancelled
+  paymentMethod?: string;
+  paymentStatus?: string;
+  paidAt?: string;
   date: string;
   createdAt: string;
 }
@@ -30,10 +33,13 @@ export async function submitOrder(data: {
   quantityOz: number;
   vault: string;
   estimatedTotal: number;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  orderId?: string;
 }): Promise<string> {
   const ordersRef = ref(db, ORDERS_PATH);
-  const newRef = push(ordersRef);
-  const id = newRef.key || Date.now().toString();
+  const newRef = data.orderId ? ref(db, `${ORDERS_PATH}/${data.orderId}`) : push(ordersRef);
+  const id = data.orderId || newRef.key || Date.now().toString();
   const now = new Date();
   const order: Omit<Order, 'id'> & { id: string } = {
     id,
@@ -47,6 +53,8 @@ export async function submitOrder(data: {
     vault: data.vault.trim(),
     estimatedTotal: data.estimatedTotal,
     status: 'pending',
+    paymentMethod: data.paymentMethod,
+    paymentStatus: data.paymentStatus,
     date: now.toISOString().split('T')[0],
     createdAt: now.toISOString(),
   };
@@ -76,7 +84,7 @@ export async function deleteOrder(id: string): Promise<void> {
 }
 
 /** Subscribe to real-time orders updates */
-export function subscribeToOrders(callback: (orders: Order[]) => void, onError?: (error: Error) => void): () => void {
+export function subscribeToOrders(callback: (orders: Order[]) => void, onError?: (error: Error & { code?: string }) => void): () => void {
   const ordersRef = ref(db, ORDERS_PATH);
   const handler = onValue(ordersRef, (snapshot) => {
     if (!snapshot.exists()) {
@@ -88,8 +96,9 @@ export function subscribeToOrders(callback: (orders: Order[]) => void, onError?:
     orders.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     callback(orders);
   }, (error) => {
-    console.warn('[orders-service] RTDB subscription error:', error.code, error.message);
-    if (onError) onError(error);
+    const dbError = error as Error & { code?: string };
+    console.warn('[orders-service] RTDB subscription error:', dbError.code, dbError.message);
+    if (onError) onError(dbError);
   });
   return () => off(ordersRef, 'value', handler);
 }

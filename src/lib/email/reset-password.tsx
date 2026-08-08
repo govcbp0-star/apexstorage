@@ -2,7 +2,6 @@ import { Section, Text } from '@react-email/components';
 import * as React from 'react';
 import EmailLayout from './layout';
 import EmailButton from './components/Button';
-import PasswordResetFooter from './components/PasswordResetFooter';
 
 interface ResetPasswordEmailProps {
   resetUrl: string;
@@ -15,8 +14,6 @@ export default function ResetPasswordEmail({ resetUrl, supportEmail }: ResetPass
       preview="Reset your APEXSTORAGE password"
       supportEmail={supportEmail}
       headerSubtitle="SECURE ACCOUNT"
-      headerDividerInset={80}
-      footer={<PasswordResetFooter supportEmail={supportEmail} />}
     >
       <Section style={{ padding: '8px 40px 0' }}>
         <Text
@@ -66,7 +63,7 @@ export default function ResetPasswordEmail({ resetUrl, supportEmail }: ResetPass
             textAlign: 'center' as const,
           }}
         >
-          This password link expires in 1 hour.
+          This link expires in 1 hour.
         </Text>
       </Section>
     </EmailLayout>

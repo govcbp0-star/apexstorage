@@ -17,6 +17,10 @@ export interface Shipment {
   deliveryPostcode: string;
   deliveryCountry: string;
   weight: number;
+  shipmentFee?: number;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  paidAt?: string;
   status: string; // pending | approved | rejected | shipped
   date: string;
   createdAt: string;
@@ -40,10 +44,14 @@ export async function submitShipment(data: {
   deliveryPostcode: string;
   deliveryCountry: string;
   weight: number;
+  shipmentFee?: number;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  shipmentId?: string;
 }): Promise<string> {
   const shipmentsRef = ref(db, SHIPMENTS_PATH);
-  const newRef = push(shipmentsRef);
-  const id = newRef.key || Date.now().toString();
+  const newRef = data.shipmentId ? ref(db, `${SHIPMENTS_PATH}/${data.shipmentId}`) : push(shipmentsRef);
+  const id = data.shipmentId || newRef.key || Date.now().toString();
   const now = new Date();
   const shipment: Omit<Shipment, 'id'> & { id: string } = {
     id,
@@ -61,6 +69,9 @@ export async function submitShipment(data: {
     deliveryPostcode: data.deliveryPostcode.trim(),
     deliveryCountry: data.deliveryCountry.trim(),
     weight: data.weight,
+    shipmentFee: data.shipmentFee,
+    paymentMethod: data.paymentMethod,
+    paymentStatus: data.paymentStatus,
     status: 'pending',
     date: now.toISOString().split('T')[0],
     createdAt: now.toISOString(),
@@ -91,7 +102,7 @@ export async function deleteShipment(id: string): Promise<void> {
 }
 
 /** Subscribe to real-time shipments updates */
-export function subscribeToShipments(callback: (shipments: Shipment[]) => void, onError?: (error: Error) => void): () => void {
+export function subscribeToShipments(callback: (shipments: Shipment[]) => void, onError?: (error: Error & { code?: string }) => void): () => void {
   const shipmentsRef = ref(db, SHIPMENTS_PATH);
   const handler = onValue(shipmentsRef, (snapshot) => {
     if (!snapshot.exists()) {
@@ -103,8 +114,9 @@ export function subscribeToShipments(callback: (shipments: Shipment[]) => void, 
     shipments.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     callback(shipments);
   }, (error) => {
-    console.warn('[shipments-service] RTDB subscription error:', error.code, error.message);
-    if (onError) onError(error);
+    const dbError = error as Error & { code?: string };
+    console.warn('[shipments-service] RTDB subscription error:', dbError.code, dbError.message);
+    if (onError) onError(dbError);
   });
   return () => off(shipmentsRef, 'value', handler);
 }

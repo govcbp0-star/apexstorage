@@ -1,4 +1,4 @@
-import { ref, push, set, get, query, orderByChild, equalTo, onValue } from 'firebase/database';
+import { ref, push, set, get, update, onValue } from 'firebase/database';
 import { db } from './firebase';
 
 export interface Transaction {
@@ -14,6 +14,7 @@ export interface Transaction {
   cryptoAmount: number; // Amount in crypto
   paymentId: string; // NOWPayments payment ID
   paymentStatus: 'pending' | 'confirmed' | 'failed' | 'expired';
+  secondaryEmail?: string;
   orderId?: string; // Link to order if gold purchase
   shipmentId?: string; // Link to shipment if shipment
   createdAt: string; // ISO timestamp
@@ -48,7 +49,7 @@ export async function updateTransactionStatus(
   status: 'pending' | 'confirmed' | 'failed' | 'expired'
 ): Promise<void> {
   const transactionRef = ref(db, `transactions/${transactionId}`);
-  await set(transactionRef, { paymentStatus: status, updatedAt: new Date().toISOString() }, { merge: true });
+  await update(transactionRef, { paymentStatus: status, updatedAt: new Date().toISOString() });
 }
 
 /**

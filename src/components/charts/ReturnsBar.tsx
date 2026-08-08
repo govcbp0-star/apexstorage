@@ -3,6 +3,8 @@
 import React from 'react';
 import {
   Chart as ChartJS,
+  type ChartOptions,
+  type TooltipItem,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -40,7 +42,7 @@ export default function ReturnsBar({ data, labels }: ReturnsBarProps) {
     ],
   };
 
-  const options = {
+  const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -54,7 +56,10 @@ export default function ReturnsBar({ data, labels }: ReturnsBarProps) {
         bodyFont: { weight: 'bold' as const },
         padding: 8,
         callbacks: {
-          label: (ctx: { parsed: { y: number } }) => `${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y}%`,
+          label: (ctx: TooltipItem<'line'>) => {
+            const value = ctx.parsed.y ?? 0;
+            return `${value >= 0 ? '+' : ''}${value}%`;
+          },
         },
       },
     },

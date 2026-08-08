@@ -434,7 +434,7 @@ export default function ClientDashboard() {
     const unsubscribe = subscribeToAssets((allAssets) => {
       if (!mounted) return;
       const filtered = allAssets.filter(a => a.userId === user.uid || a.owner === user.email);
-      if (filtered.length > 0) setAssets(filtered);
+      setAssets(filtered);
     }, (error) => {
       console.warn('[Client] RTDB assets subscription error:', error.code);
     });
@@ -447,7 +447,7 @@ export default function ClientDashboard() {
     const unsubscribe = subscribeToOrders((allOrders) => {
       if (!mounted) return;
       const filtered = allOrders.filter(o => o.userId === user.uid || o.userEmail === user.email);
-      if (filtered.length > 0) setOrders(filtered);
+      setOrders(filtered);
     }, (error) => {
       console.warn('[Client] RTDB orders subscription error:', error.code);
     });
@@ -460,7 +460,7 @@ export default function ClientDashboard() {
     const unsubscribe = subscribeToShipments((allShipments) => {
       if (!mounted) return;
       const filtered = allShipments.filter(s => s.userId === user.uid || s.userEmail === user.email);
-      if (filtered.length > 0) setShipments(filtered);
+      setShipments(filtered);
     }, (error) => {
       console.warn('[Client] RTDB shipments subscription error:', error.code);
     });
@@ -473,7 +473,7 @@ export default function ClientDashboard() {
     const unsubscribe = subscribeToVaultRequests((allRequests) => {
       if (!mounted) return;
       const filtered = allRequests.filter(r => r.userId === user.uid || r.userEmail === user.email);
-      if (filtered.length > 0) setMyVaultRequests(filtered);
+      setMyVaultRequests(filtered);
     });
     return () => { mounted = false; unsubscribe(); };
   }, [user, authLoading]);

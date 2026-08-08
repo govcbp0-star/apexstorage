@@ -3,6 +3,8 @@
 import React from 'react';
 import {
   Chart as ChartJS,
+  type ChartOptions,
+  type TooltipItem,
   CategoryScale,
   LinearScale,
   BarElement,
@@ -34,7 +36,7 @@ export default function GrowthBar({ data, labels }: GrowthBarProps) {
     ],
   };
 
-  const options = {
+  const options: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -48,7 +50,10 @@ export default function GrowthBar({ data, labels }: GrowthBarProps) {
         bodyFont: { weight: 'bold' as const },
         padding: 8,
         callbacks: {
-          label: (ctx: { parsed: { y: number } }) => `${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y}%`,
+          label: (ctx: TooltipItem<'bar'>) => {
+            const value = ctx.parsed.y ?? 0;
+            return `${value >= 0 ? '+' : ''}${value}%`;
+          },
         },
       },
     },

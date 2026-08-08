@@ -11,6 +11,7 @@ import BuyGoldModal from '@/components/modals/BuyGoldModal';
 import ShipmentWizard from '@/components/modals/ShipmentWizard';
 import PerformanceChart from '@/components/modals/PerformanceChart';
 import { formatNumber } from '@/lib/gold-price';
+import type { Chart as ChartJS } from 'chart.js';
 
 // Toast component
 function Toast({ message, type, visible }: { message: string; type: string; visible: boolean }) {
@@ -68,7 +69,7 @@ export default function HomePage() {
 
   // Gold chart canvas ref
   const goldChartRef = useRef<HTMLCanvasElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof import('chart.js').Chart> | null>(null);
+  const chartInstanceRef = useRef<ChartJS<'line'> | null>(null);
 
   // Demo assets for modals
   const demoAssets = [

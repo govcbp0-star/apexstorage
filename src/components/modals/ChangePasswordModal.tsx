@@ -41,14 +41,18 @@ export default function ChangePasswordModal({ open, onClose, email, onToast }: C
   const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState('');
 
-  // Reset state when modal opens
+  // Reset state when modal opens. Deferred so we don't call setState
+  // synchronously inside the effect (react-hooks/set-state-in-effect) — the
+  // reset still happens right after the modal opens, behavior unchanged.
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    const id = setTimeout(() => {
       setStep('form');
       setSending(false);
       setCooldown(0);
       setError('');
-    }
+    }, 0);
+    return () => clearTimeout(id);
   }, [open]);
 
   // Cooldown countdown

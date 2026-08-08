@@ -17,12 +17,42 @@ import { Resend } from 'resend';
 
 let cachedClient: Resend | null = null;
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+const DEFAULT_APP_URL = 'http://localhost:3000';
+
+function normalizeAppUrl(rawUrl?: string): string {
+  const value = (rawUrl || DEFAULT_APP_URL).trim().replace(/\/+$/, '');
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('Unsupported protocol');
+    }
+    return url.origin;
+  } catch {
+    throw new Error(`APP_URL is invalid. Set APP_URL to a full http(s) URL, for example ${DEFAULT_APP_URL}.`);
+  }
+}
+
+function validateSenderIdentity(from: string): void {
+  const trimmed = from.trim();
+  const emailMatch = trimmed.match(/<([^>]+)>$/);
+  const email = emailMatch ? emailMatch[1] : trimmed;
+
+  if (!EMAIL_RE.test(email)) {
+    throw new Error('EMAIL_FROM is invalid. Use a valid sender address, for example "APEXSTORAGE <security@apexstorage.site>".');
+  }
+  if (/yourdomain\.com/i.test(email)) {
+    throw new Error('EMAIL_FROM still uses the placeholder yourdomain.com. Configure a sender from a verified Resend domain.');
+  }
+}
+
 export function getResend(): Resend {
   if (cachedClient) return cachedClient;
-  if (!process.env.RESEND_API_KEY) {
+  if (!process.env.RESEND_API_KEY?.trim()) {
     throw new Error('Resend is not configured. Set RESEND_API_KEY.');
   }
-  cachedClient = new Resend(process.env.RESEND_API_KEY);
+  cachedClient = new Resend(process.env.RESEND_API_KEY.trim());
   return cachedClient;
 }
 
@@ -39,4 +69,39 @@ export const SUPPORT_EMAIL =
   process.env.SUPPORT_EMAIL || 'support@apexstorage.site';
 
 /** Public application URL used as the Firebase action continue URL. */
-export const APP_URL = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+export function getAppUrl(): string {
+  return normalizeAppUrl(process.env.APP_URL);
+}
+
+/**
+ * True when a URL is a real public https URL that is safe to embed in
+ * outbound email. Emails must never contain loopback/private/development
+ * URLs — mailbox providers classify messages linking to them as spam or
+ * phishing (this is what kept the welcome email out of the inbox).
+ */
+export function isPublicWebUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.localhost')) return false;
+    if (host === '127.0.0.1' || host.startsWith('127.')) return false;
+    if (/^(10\.|192\.168\.)/.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function assertEmailConfig(): void {
+  validateSenderIdentity(EMAIL_FROM);
+  if (!EMAIL_RE.test(SUPPORT_EMAIL)) {
+    throw new Error('SUPPORT_EMAIL is invalid.');
+  }
+  if (REPLY_TO && !EMAIL_RE.test(REPLY_TO)) {
+    throw new Error('REPLY_TO is invalid.');
+  }
+  getAppUrl();
+  getResend();
+}

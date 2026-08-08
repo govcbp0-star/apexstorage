@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 
 export default function RegisterPage() {
-  const { register, googleSignIn, emailNotVerified, unverifiedEmail } = useAuth();
+  const { register, googleSignIn, emailNotVerified, unverifiedEmail, verificationEmailFailed } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,6 +72,13 @@ export default function RegisterPage() {
               <p className="text-[11px] text-[#8A8A8E] mb-6 leading-relaxed">
                 Please check your inbox and click the verification link to activate your account. You&apos;ll be able to sign in after verifying your email.
               </p>
+
+              {verificationEmailFailed && (
+                <div className="mb-4 p-2.5 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400 leading-relaxed">
+                  We couldn&apos;t send the verification email. Please try again shortly or request a new link after signing in.
+                </div>
+              )}
+
               <Link
                 href="/auth/login"
                 className="inline-block w-full btn-gold text-center text-xs"

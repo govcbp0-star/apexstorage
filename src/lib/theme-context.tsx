@@ -26,7 +26,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem('apex-theme') as Theme | null;
     if (stored === 'light' || stored === 'dark') {
-      setTheme(stored);
+      // Deferred so we don't call setState synchronously inside the effect
+      // (react-hooks/set-state-in-effect) — behavior is unchanged.
+      const id = setTimeout(() => setTheme(stored), 0);
+      return () => clearTimeout(id);
     }
   }, []);
 

@@ -72,20 +72,36 @@ export async function readRTDB(path: string, idToken?: string): Promise<Record<s
 
 let cachedAuth: Auth | null = null;
 
+function normalizePrivateKey(): string | null {
+  const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+  if (!rawKey) return null;
+
+  const privateKey = rawKey.trim().replace(/\\n/g, '\n');
+  if (
+    !privateKey.startsWith('-----BEGIN PRIVATE KEY-----') ||
+    !privateKey.includes('-----END PRIVATE KEY-----')
+  ) {
+    return null;
+  }
+
+  return privateKey;
+}
+
 export function isAdminConfigured(): boolean {
   return Boolean(
-    process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_CLIENT_EMAIL &&
-    process.env.FIREBASE_PRIVATE_KEY
+    process.env.FIREBASE_PROJECT_ID?.trim() &&
+    process.env.FIREBASE_CLIENT_EMAIL?.trim() &&
+    normalizePrivateKey()
   );
 }
 
 export function getAdminAuth(): Auth {
   if (cachedAuth) return cachedAuth;
 
+  const privateKey = normalizePrivateKey();
   if (!isAdminConfigured()) {
     throw new Error(
-      'Firebase Admin SDK is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY.'
+      'Firebase Admin SDK is not configured correctly. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and a valid FIREBASE_PRIVATE_KEY PEM.'
     );
   }
 
@@ -93,10 +109,10 @@ export function getAdminAuth(): Auth {
     ? getApps()[0]!
     : initializeApp({
         credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          projectId: process.env.FIREBASE_PROJECT_ID!.trim(),
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL!.trim(),
           // The private key arrives with literal \n escapes — restore real newlines
-          privateKey: process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+          privateKey: privateKey!,
         }),
       });
 

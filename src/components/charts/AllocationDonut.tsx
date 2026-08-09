@@ -30,7 +30,7 @@ export default function AllocationDonut({ bars, coins, jewellery }: AllocationDo
       {
         data: hasData ? [bars, coins, jewellery] : [1, 1, 1],
         backgroundColor: hasData
-          ? ['#C9A84C', '#38BDF8', '#A855F7']
+          ? ['#C9A84C', '#5F8B6E', '#8E6B2A']
           : ct.emptyColors,
         borderColor: ct.donutBorder,
         borderWidth: 3,
@@ -74,13 +74,13 @@ export default function AllocationDonut({ bars, coins, jewellery }: AllocationDo
           <span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{barPct}%</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: '#38BDF8' }} />
+          <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: '#5F8B6E' }} />
           <span className="text-[11px] text-[#8A8A8E]">Gold Coins</span>
           <span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{coinPct}%</span>
         </div>
         {(jewellery > 0 || !hasData) && (
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: '#A855F7' }} />
+            <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: '#8E6B2A' }} />
             <span className="text-[11px] text-[#8A8A8E]">Jewellery</span>
             <span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{hasData ? (100 - barPct - coinPct) : 0}%</span>
           </div>

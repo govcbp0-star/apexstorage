@@ -97,8 +97,8 @@ export default function Navbar() {
         onModeChange={setAuthMode}
       />
       <nav
-        className={`fixed w-full z-50 bg-[#0b0e14]/95 backdrop-blur-lg border-b border-[#1c222e] transition-all duration-300 ${
-          scrolled ? 'shadow-2xl shadow-black/30' : ''
+        className={`fixed w-full z-50 bg-[#0D0B07]/95 backdrop-blur-lg border-b border-[#2A2114] transition-all duration-300 ${
+          scrolled ? 'shadow-2xl shadow-black/40' : ''
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -106,16 +106,16 @@ export default function Navbar() {
             <Link href="/" className="flex items-center gap-2 cursor-pointer">
               <svg className="w-8 h-8" viewBox="0 0 40 40" fill="none">
                 <path d="M20 4L4 36h8l8-16 8 16h8L20 4z" fill="url(#logoGrad)" opacity="0.9" />
-                <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#1A1A1E" />
-                <circle cx="20" cy="20" r="3" fill="#C9A84C" />
+                <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#1B1307" />
+                <circle cx="20" cy="20" r="3" fill="#C8A24B" />
                 <defs>
                   <linearGradient id="logoGrad" x1="4" y1="4" x2="36" y2="36">
-                    <stop stopColor="#D4B96A" />
-                    <stop offset="1" stopColor="#A68A3E" />
+                    <stop stopColor="#E3C878" />
+                    <stop offset="1" stopColor="#9A7632" />
                   </linearGradient>
                 </defs>
               </svg>
-              <span className="text-base font-bold tracking-[0.1em] text-[#F5F5F5]">APEXSTORAGE</span>
+              <span className="display-head text-[17px] font-semibold tracking-[0.08em] text-[#EFE7D8]">APEXSTORAGE</span>
             </Link>
 
           {/* Desktop nav */}
@@ -126,10 +126,10 @@ export default function Navbar() {
                   <button
                     key={link.id}
                     onClick={link.onClick}
-                    className={`nav-link px-3 py-2 font-medium text-xs tracking-wide cursor-pointer bg-transparent border-none ${
+                    className={`nav-link px-3 py-2 font-medium cursor-pointer bg-transparent border-none ${
                       activeNav === link.id
-                        ? 'text-[#C9A84C] border-b-2 border-[#C9A84C]'
-                        : 'text-[#F5F5F5] hover:text-[#C9A84C]'
+                        ? 'text-[#E3C878] border-b-2 border-[#C8A24B]'
+                        : 'text-[#EFE7D8] hover:text-[#E3C878]'
                     }`}
                   >
                     {link.label}
@@ -137,15 +137,15 @@ export default function Navbar() {
                 ))}
                 <Link
                   href="/contact"
-                  className={`nav-link px-3 py-2 font-medium text-xs tracking-wide cursor-pointer bg-transparent border-none ${
+                  className={`nav-link px-3 py-2 font-medium cursor-pointer bg-transparent border-none ${
                     activeNav === 'contact'
-                      ? 'text-[#C9A84C] border-b-2 border-[#C9A84C]'
-                      : 'text-[#F5F5F5] hover:text-[#C9A84C]'
+                      ? 'text-[#E3C878] border-b-2 border-[#C8A24B]'
+                      : 'text-[#EFE7D8] hover:text-[#E3C878]'
                   }`}
                 >
                   CONTACT
                 </Link>
-                <div className="w-px h-5 bg-[#1b212c] mx-2" />
+                <div className="w-px h-5 bg-[#2A2114] mx-2" />
                 <button onClick={() => openAuthModal('login')} className="btn-ghost">
                   SIGN IN
                 </button>
@@ -159,8 +159,8 @@ export default function Navbar() {
                 <Link href="/dashboard/client" className="btn-gold-outline text-xs">
                   DASHBOARD
                 </Link>
-                <span className="text-[#8A8A8E] text-xs tracking-wide">
-                  Welcome, <span className="text-[#C9A84C]">{userProfile?.name || 'Client'}</span>
+                <span className="text-[#8C8272] text-xs tracking-wide">
+                  Welcome, <span className="text-[#E3C878]">{userProfile?.name || 'Client'}</span>
                 </span>
                 <button onClick={handleLogout} className="btn-ghost">
                   SIGN OUT
@@ -174,7 +174,7 @@ export default function Navbar() {
                 </Link>
                 <span className="text-[#8A8A8E] text-xs tracking-wide flex items-center gap-1">
                   <svg
-                    className="w-3.5 h-3.5 text-[#C9A84C]"
+                    className="w-3.5 h-3.5 text-[#C8A24B]"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -186,7 +186,7 @@ export default function Navbar() {
                       d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
                     />
                   </svg>
-                  <span className="text-[#C9A84C]">{userProfile?.name || 'Admin'}</span>
+                  <span className="text-[#E3C878]">{userProfile?.name || 'Admin'}</span>
                 </span>
                 <button onClick={handleLogout} className="btn-ghost">
                   SIGN OUT
@@ -198,7 +198,7 @@ export default function Navbar() {
           {/* Mobile toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden text-[#F5F5F5] hover:text-[#C9A84C] transition-colors p-1.5"
+            className="lg:hidden text-[#EFE7D8] hover:text-[#E3C878] transition-colors p-1.5"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6h16M4 12h16M4 18h16" />
@@ -209,7 +209,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-[#1c222e] bg-[#0b0e14]/98 backdrop-blur-xl">
+        <div className="lg:hidden border-t border-[#2A2114] bg-[#0D0B07]/98 backdrop-blur-xl">
           <div className="px-4 pt-3 pb-4 space-y-1">
             {authRole === 'guest' && (
               <div className="space-y-0">
@@ -218,7 +218,7 @@ export default function Navbar() {
                     key={link.id}
                     onClick={link.onClick}
                     className={`block w-full text-left py-2 font-medium text-xs tracking-wide cursor-pointer bg-transparent border-none ${
-                      activeNav === link.id ? 'text-[#C9A84C] border-b-2 border-[#C9A84C]' : 'text-[#F5F5F5] hover:text-[#C9A84C]'
+                      activeNav === link.id ? 'text-[#E3C878] border-b-2 border-[#C8A24B]' : 'text-[#EFE7D8] hover:text-[#E3C878]'
                     }`}
                   >
                     {link.label}
@@ -229,14 +229,14 @@ export default function Navbar() {
                   onClick={() => setMobileMenuOpen(false)}
                   className={`block w-full text-left py-2 font-medium text-xs tracking-wide cursor-pointer bg-transparent border-none ${
                     activeNav === 'contact'
-                      ? 'text-[#C9A84C] border-b-2 border-[#C9A84C]'
-                      : 'text-[#F5F5F5] hover:text-[#C9A84C]'
+                      ? 'text-[#E3C878] border-b-2 border-[#C8A24B]'
+                      : 'text-[#EFE7D8] hover:text-[#E3C878]'
                   }`}
                 >
                   CONTACT
                 </Link>
                 <div className="pt-3 flex gap-2">
-                  <button onClick={() => openAuthModal('login')} className="flex-1 btn-ghost text-center border border-[#1c222e] rounded-sm text-xs">
+                  <button onClick={() => openAuthModal('login')} className="flex-1 btn-ghost text-center border border-[#2A2114] text-xs">
                     SIGN IN
                   </button>
                   <button onClick={() => openAuthModal('register')} className="flex-1 btn-gold-outline text-center text-xs">
@@ -247,20 +247,20 @@ export default function Navbar() {
             )}
             {authRole === 'client' && (
               <div className="space-y-2">
-                <Link href="/dashboard/client" className="block w-full text-center py-2 text-[#C9A84C] font-medium text-xs tracking-wide border border-[#1c222e] rounded-sm">
+                <Link href="/dashboard/client" className="block w-full text-center py-2 text-[#E3C878] font-medium text-xs tracking-wide border border-[#2A2114]">
                   DASHBOARD
                 </Link>
-                <button onClick={handleLogout} className="w-full btn-ghost text-center border border-[#1c222e] rounded-sm py-2 text-xs">
+                <button onClick={handleLogout} className="w-full btn-ghost text-center border border-[#2A2114] py-2 text-xs">
                   SIGN OUT
                 </button>
               </div>
             )}
             {authRole === 'admin' && (
               <div className="space-y-2">
-                <Link href="/dashboard/admin" className="block w-full text-center py-2 text-[#C9A84C] font-medium text-xs tracking-wide border border-[#1c222e] rounded-sm">
+                <Link href="/dashboard/admin" className="block w-full text-center py-2 text-[#E3C878] font-medium text-xs tracking-wide border border-[#2A2114]">
                   ADMIN PANEL
                 </Link>
-                <button onClick={handleLogout} className="w-full btn-ghost text-center border border-[#1c222e] rounded-sm py-2 text-xs">
+                <button onClick={handleLogout} className="w-full btn-ghost text-center border border-[#2A2114] py-2 text-xs">
                   SIGN OUT
                 </button>
               </div>

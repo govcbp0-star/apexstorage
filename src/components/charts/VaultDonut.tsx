@@ -29,7 +29,7 @@ export default function VaultDonut({ bars, coins, jewellery }: VaultDonutProps) 
       {
         data: hasData ? [bars, coins, jewellery] : [1, 1, 1],
         backgroundColor: hasData
-          ? ['#C9A84C', '#38BDF8', '#A855F7']
+          ? ['#C9A84C', '#5F8B6E', '#8E6B2A']
           : ct.emptyColors,
         borderColor: ct.donutBorder,
         borderWidth: 2,

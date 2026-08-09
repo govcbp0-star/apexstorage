@@ -24,6 +24,15 @@ const nextConfig: NextConfig = {
   // does not, so this must stay external.
   serverExternalPackages: ['firebase-admin', 'jwks-rsa', 'jose'],
   async headers() {
+    // Immutable caching for /_next/static is PRODUCTION-ONLY. In dev,
+    // Turbopack keeps stable chunk URLs while their content changes, so
+    // immutable caching makes the browser serve stale CSS/JS forever
+    // (stale styles, missing rules, hydration mismatches). Dev gets
+    // no-store so every load reflects the current source.
+    const assetHeaders =
+      process.env.NODE_ENV === "production"
+        ? [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }]
+        : [{ key: "Cache-Control", value: "no-store" }];
     return [
       {
         source: "/sitemap.xml",
@@ -43,15 +52,11 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/_next/static/(.*)",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
+        headers: assetHeaders,
       },
       {
         source: "/images/(.*)",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
+        headers: assetHeaders,
       },
     ];
   },

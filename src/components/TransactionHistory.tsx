@@ -84,8 +84,11 @@ export default function TransactionHistory({ transactions, isAdmin = false }: Tr
               >
                 {tx.paymentStatus}
               </span>
-              <span className="text-[8px] text-[#8A8A8E] font-mono break-all text-right max-w-[150px]">
-                ID: {tx.paymentId.substring(0, 8)}...
+              <span
+                className="text-[8px] text-[#8A8A8E] font-mono break-all text-right max-w-[150px]"
+                title={tx.paymentId || undefined}
+              >
+                ID: {tx.paymentId ? (tx.paymentId.length > 16 ? `${tx.paymentId.slice(0, 10)}…${tx.paymentId.slice(-4)}` : tx.paymentId) : '—'}
               </span>
             </div>
           </div>

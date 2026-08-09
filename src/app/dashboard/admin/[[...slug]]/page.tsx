@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -30,7 +30,7 @@ function Toast({ message, type, visible }: { message: string; type: string; visi
   const colors: Record<string, string> = {
     success: 'bg-green-500/10 border-green-500/20 text-green-500',
     error: 'bg-red-500/10 border-red-500/20 text-red-400',
-    info: 'bg-[#38BDF8]/10 border-[#38BDF8]/20 text-[#38BDF8]',
+    info: 'bg-[#C8A24B]/10 border-[#C8A24B]/20 text-[#C8A24B]',
   };
   return (
     <div className={`fixed bottom-6 right-6 z-[200] px-4 py-2.5 border rounded-lg ${colors[type] || colors.info} text-xs font-medium tracking-wide`}>
@@ -193,6 +193,16 @@ export default function AdminDashboard() {
   const { authRole, user, userProfile, loading: authLoading, logout, pending2FA } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Sub-views are real URL routes (e.g. /dashboard/admin/users): the last path
+  // segment drives activeNav so sub-pages are deep-linkable, shareable, and
+  // survive refresh. Unknown slugs fall back to the overview.
+  const ADMIN_NAV_IDS = ['overview', 'users', 'assets', 'approvals', 'transactions', 'analytics', 'messages', 'vaults', 'orders', 'newsletter'];
+  const activeNav = ADMIN_NAV_IDS.includes(pathname.split('/').pop() || '') ? (pathname.split('/').pop() as string) : 'overview';
+  const navigateTo = useCallback((nav: string) => {
+    if (ADMIN_NAV_IDS.includes(nav)) router.push(`/dashboard/admin/${nav}`);
+  }, [router]);
 
   const [transitionLoading, setTransitionLoading] = useState(true);
 
@@ -204,7 +214,6 @@ export default function AdminDashboard() {
   }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeNav, setActiveNav] = useState('overview');
   const [profileOpen, setProfileOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [performanceOpen, setPerformanceOpen] = useState(false);
@@ -840,7 +849,7 @@ export default function AdminDashboard() {
             <a href="/" className="flex items-center gap-2">
               <svg className="w-8 h-8" viewBox="0 0 40 40" fill="none">
                 <path d="M20 4L4 36h8l8-16 8 16h8L20 4z" fill="url(#aLogoGrad)" opacity="0.9" />
-                <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#1A1A1E" />
+                <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#0D0B07" />
                 <circle cx="20" cy="20" r="3" fill="#C9A84C" />
                 <defs><linearGradient id="aLogoGrad" x1="4" y1="4" x2="36" y2="36"><stop stopColor="#D4B96A" /><stop offset="1" stopColor="#A68A3E" /></linearGradient></defs>
               </svg>
@@ -950,7 +959,7 @@ export default function AdminDashboard() {
                                   onClick={() => {
                                     markNotificationRead(notification.id);
                                     setNotificationOpen(false);
-                                    if (notification.nav) setActiveNav(notification.nav);
+                                    if (notification.nav) navigateTo(notification.nav);
                                   }}
                                   className={cn(
                                     'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[#1b212c]',
@@ -1039,7 +1048,7 @@ export default function AdminDashboard() {
         </div>
       </nav>
 
-      <Sidebar type="admin" activeNav={activeNav} onNavChange={setActiveNav} sidebarOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={() => setProfileOpen(true)} onChangePassword={() => setChangePasswordOpen(true)} goldSpotPrice={goldSpotPrice} />
+      <Sidebar type="admin" activeNav={activeNav} onNavChange={navigateTo} sidebarOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={() => setProfileOpen(true)} onChangePassword={() => setChangePasswordOpen(true)} goldSpotPrice={goldSpotPrice} />
 
       {/* Modals */}
       <ProfileSettings open={profileOpen} onClose={() => setProfileOpen(false)} onToast={showToast} />
@@ -1243,7 +1252,7 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               {/* Section Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Overview</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">System Management</h1></div>
+                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Overview</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">System Management</h1></div>
               </div>
 
               {/* Stat Cards — all data from RTDB */}
@@ -1270,7 +1279,7 @@ export default function AdminDashboard() {
               <div className="bg-[#10141d] border border-[#1c222e] rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold tracking-[0.15em] text-[#F5F5F5] uppercase">Pending Vault Requests</h3>
-                  <button onClick={() => setActiveNav('vaults')} className="text-[10px] text-[#C9A84C] hover:underline tracking-wider uppercase">View All</button>
+                  <button onClick={() => navigateTo('vaults')} className="text-[10px] text-[#C9A84C] hover:underline tracking-wider uppercase">View All</button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -1338,7 +1347,7 @@ export default function AdminDashboard() {
                         return (
                           <>
                             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#C9A84C'}}></span><span className="text-[11px] text-[#8A8A8E]">Gold Bars</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{barW.toLocaleString()}g</span></div>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#38BDF8'}}></span><span className="text-[11px] text-[#8A8A8E]">Gold Coins</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{coinW.toLocaleString()}g</span></div>
+                            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#5F8B6E'}}></span><span className="text-[11px] text-[#8A8A8E]">Gold Coins</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{coinW.toLocaleString()}g</span></div>
                             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#A68A3E'}}></span><span className="text-[11px] text-[#8A8A8E]">Jewellery</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{jewW.toLocaleString()}g</span></div>
                           </>
                         );
@@ -1381,7 +1390,7 @@ export default function AdminDashboard() {
             <div>
               {/* Section Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Management</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Users</h1></div>
+                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Management</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Users</h1></div>
                 <div className="text-xs text-[#8A8A8E]"><span className="text-[#C9A84C] font-bold">{users.length}</span> total</div>
               </div>
               <div className="bg-[#10141d] border border-[#1c222e] rounded-lg p-4 overflow-x-auto">
@@ -1416,7 +1425,7 @@ export default function AdminDashboard() {
             <div>
               {/* Section Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Management</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Assets</h1></div>
+                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Management</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Assets</h1></div>
                 <button onClick={() => openAssetModal(false)} className="btn-gold text-xs px-4 py-2">Add Asset</button>
               </div>
               <div className="bg-[#10141d] border border-[#1c222e] rounded-lg p-4 overflow-x-auto">
@@ -1451,7 +1460,7 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               {/* Section Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Management</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Approvals</h1></div>
+                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Management</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Approvals</h1></div>
                 <div className="text-xs text-[#8A8A8E]"><span className="text-[#C9A84C] font-bold">{pendingVaultCount + pendingOrdersCount + pendingShipmentsCount}</span> total pending item{pendingVaultCount + pendingOrdersCount + pendingShipmentsCount !== 1 ? 's' : ''}</div>
               </div>
 
@@ -1497,7 +1506,7 @@ export default function AdminDashboard() {
                             <td className="py-2"><span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#C9A84C]/20 text-[#C9A84C]">PENDING</span></td>
                             <td className="py-2 text-right">
                               <div className="flex gap-1.5 justify-end">
-                                <button onClick={() => { setSelectedVaultRequest(v); setVaultDetailOpen(true); }} className="px-2 py-0.5 bg-[#38BDF8]/10 text-[#38BDF8] rounded text-[9px] font-bold tracking-wider hover:bg-[#38BDF8]/20">View</button>
+                                <button onClick={() => { setSelectedVaultRequest(v); setVaultDetailOpen(true); }} className="px-2 py-0.5 bg-[#C8A24B]/10 text-[#C8A24B] rounded text-[9px] font-bold tracking-wider hover:bg-[#C8A24B]/20">View</button>
                                 <button onClick={() => approveVaultRequest(v.id)} className="px-2 py-0.5 bg-green-500/10 text-green-500 rounded text-[9px] font-bold tracking-wider hover:bg-green-500/20">Approve</button>
                                 <button onClick={() => rejectVaultRequest(v.id)} className="px-2 py-0.5 bg-red-500/10 text-red-500 rounded text-[9px] font-bold tracking-wider hover:bg-red-500/20">Reject</button>
                               </div>
@@ -1620,9 +1629,9 @@ export default function AdminDashboard() {
             // Vault distribution from assets
             const vaultWeights: Record<string, { weight: number; color: string; label: string }> = {
               zurich: { weight: 0, color: '#C9A84C', label: 'Zurich' },
-              singapore: { weight: 0, color: '#38BDF8', label: 'Singapore' },
-              london: { weight: 0, color: '#34D399', label: 'London' },
-              newyork: { weight: 0, color: '#A78BFA', label: 'New York' },
+              singapore: { weight: 0, color: '#5F8B6E', label: 'Singapore' },
+              london: { weight: 0, color: '#8E6B2A', label: 'London' },
+              newyork: { weight: 0, color: '#B4633F', label: 'New York' },
             };
             const locMap: Record<string, string> = { zurich: 'zurich', singapore: 'singapore', london: 'london', newyork: 'newyork', 'new york': 'newyork', 'zurich a': 'zurich', 'singapore b': 'singapore', 'london c': 'london', 'new york d': 'newyork' };
             assets.forEach(a => {
@@ -1670,7 +1679,7 @@ export default function AdminDashboard() {
               <div>
                 {/* Section Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                  <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Insights</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Analytics</h1></div>
+                  <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Insights</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Analytics</h1></div>
                 </div>
                 <div className="grid lg:grid-cols-2 gap-6">
                   <div className="bg-[#10141d] border border-[#1c222e] rounded-lg p-4">
@@ -1682,7 +1691,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex flex-col gap-3 w-full">
                         <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#C9A84C'}}></span><span className="text-[11px] text-[#8A8A8E]">Gold Bars</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{barWeight.toLocaleString()}g</span></div>
-                        <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#38BDF8'}}></span><span className="text-[11px] text-[#8A8A8E]">Gold Coins</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{coinWeight.toLocaleString()}g</span></div>
+                        <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#5F8B6E'}}></span><span className="text-[11px] text-[#8A8A8E]">Gold Coins</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{coinWeight.toLocaleString()}g</span></div>
                         <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{background: '#A68A3E'}}></span><span className="text-[11px] text-[#8A8A8E]">Jewellery</span><span className="ml-auto text-[11px] font-bold text-[#F5F5F5]">{jewelleryWeight.toLocaleString()}g</span></div>
                       </div>
                     </div>
@@ -1727,7 +1736,7 @@ export default function AdminDashboard() {
             <div>
               {/* Section Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Communications</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Messages</h1></div>
+                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Communications</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Messages</h1></div>
                 <div className="text-xs text-[#8A8A8E]">
                   <span>{unreadCount}</span> unread
                 </div>
@@ -1764,7 +1773,7 @@ export default function AdminDashboard() {
             <div>
               {/* Section Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Operations</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Vaults</h1></div>
+                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Operations</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Vaults</h1></div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-[#8A8A8E]">
                     <span className="text-[#C9A84C] font-bold">{vaultRequests.filter(v => v.status === 'pending').length}</span> pending
@@ -1813,7 +1822,7 @@ export default function AdminDashboard() {
             <div>
               {/* Section Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
-                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Operations</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Orders</h1></div>
+                <div><span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Operations</span><h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">Orders</h1></div>
                 <div className="text-xs text-[#8A8A8E]"><span className="text-[#C9A84C] font-bold">{orders.length}</span> total · <span className="text-[#C9A84C] font-bold">{pendingOrdersCount}</span> pending</div>
               </div>
 
@@ -1856,7 +1865,7 @@ export default function AdminDashboard() {
                             <td className="py-2 text-[#8A8A8E]">{o.date}</td>
                             <td className="py-2 text-right">
                               <div className="flex gap-1.5 justify-end">
-                                <button onClick={() => { setSelectedOrder(o); setOrderDetailOpen(true); }} className="px-2 py-0.5 bg-[#38BDF8]/10 text-[#38BDF8] rounded text-[9px] font-bold tracking-wider hover:bg-[#38BDF8]/20">View</button>
+                                <button onClick={() => { setSelectedOrder(o); setOrderDetailOpen(true); }} className="px-2 py-0.5 bg-[#C8A24B]/10 text-[#C8A24B] rounded text-[9px] font-bold tracking-wider hover:bg-[#C8A24B]/20">View</button>
                                 {o.status === 'pending' && (
                                   <>
                                     <button onClick={() => updateOrderStatus(o.id, 'processing')} className="px-2 py-0.5 bg-green-500/10 text-green-500 rounded text-[9px] font-bold tracking-wider hover:bg-green-500/20">Process</button>
@@ -1930,7 +1939,7 @@ export default function AdminDashboard() {
             <div className="bg-[#10141d] border border-[#1c222e] rounded-lg p-4">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase">Payments</span>
+                  <span className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono">Payments</span>
                   <h1 className="text-xl font-bold text-[#F5F5F5] mt-0.5 tracking-tight">All Transactions</h1>
                 </div>
                 <div className="text-xs text-[#8A8A8E]">
@@ -2007,7 +2016,7 @@ function DashboardLoader() {
         <div className="relative mb-8 animate-pulse">
           <svg className="w-16 h-16 drop-shadow-[0_0_15px_rgba(201,168,76,0.3)]" viewBox="0 0 40 40" fill="none">
             <path d="M20 4L4 36h8l8-16 8 16h8L20 4z" fill="url(#loaderLogoGradAdmin)" opacity="0.95" />
-            <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#111114" />
+            <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#0D0B07" />
             <circle cx="20" cy="20" r="3" fill="#C9A84C" />
             <defs>
               <linearGradient id="loaderLogoGradAdmin" x1="4" y1="4" x2="36" y2="36">
@@ -2028,7 +2037,7 @@ function DashboardLoader() {
         </div>
 
         {/* Dynamic loading text */}
-        <p className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase mb-1">
+        <p className="text-[10px] font-bold tracking-[0.25em] text-[#C9A84C] uppercase font-mono mb-1">
           SECURE HANDSHAKE
         </p>
         <p className="text-[9px] font-medium tracking-[0.15em] text-[#8A8A8E] uppercase mb-3 font-mono">

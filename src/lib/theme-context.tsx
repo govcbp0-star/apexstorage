@@ -18,6 +18,7 @@ const ThemeContext = createContext<ThemeContextType>({
 export const useTheme = () => useContext(ThemeContext);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // The rusty dark warm UI is the dashboard default; light is opt-in.
   const [theme, setTheme] = useState<Theme>('dark');
   const pathname = usePathname();
   // Theme switching only applies to dashboard routes; public pages stay dark.

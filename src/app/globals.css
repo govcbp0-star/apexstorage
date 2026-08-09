@@ -6,8 +6,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-work-sans);
+  --font-mono: var(--font-plex-mono);
+  --font-display: var(--font-fraunces);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -41,84 +42,87 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --color-aurum-dark: #1A1A1E;
-  --color-aurum-darker: #111114;
-  --color-aurum-gold: #C9A84C;
-  --color-aurum-gold-light: #D4B96A;
-  --color-aurum-gold-dark: #A68A3E;
-  --color-aurum-white: #F5F5F5;
-  --color-aurum-charcoal: #2A2A2E;
-  --color-aurum-gray: #8A8A8E;
-  --color-aurum-gray-light: #B0B0B4;
+  /* ── The Assay Ledger palette ───────────────────────────────
+     Warm vault interior, bullion gold, bronze hairlines, and
+     mineral status colors (patina = up/live, rust = down). */
+  --color-aurum-dark: #1B1307;
+  --color-aurum-darker: #0D0B07;
+  --color-aurum-gold: #C8A24B;
+  --color-aurum-gold-light: #E3C878;
+  --color-aurum-gold-dark: #8E6B2A;
+  --color-aurum-white: #EFE7D8;
+  --color-aurum-charcoal: #241C10;
+  --color-aurum-gray: #8C8272;
+  --color-aurum-gray-light: #B9AE9B;
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: #0b0e14;
-  --foreground: #F5F5F5;
-  --card: #10141d;
-  --card-foreground: #F5F5F5;
-  --popover: #10141d;
-  --popover-foreground: #F5F5F5;
-  --primary: #C9A84C;
-  --primary-foreground: #1A1A1E;
-  --secondary: #2A2A2E;
-  --secondary-foreground: #F5F5F5;
-  --muted: #2A2A2E;
-  --muted-foreground: #8A8A8E;
-  --accent: #2A2A2E;
-  --accent-foreground: #F5F5F5;
-  --destructive: #EF4444;
-  --border: #1c222e;
-  --input: #212836;
-  --ring: #C9A84C;
-  --chart-1: #C9A84C;
-  --chart-2: #38BDF8;
-  --chart-3: #A68A3E;
-  --chart-4: #D4B96A;
-  --chart-5: #8A8A8E;
-  --sidebar: #10141d;
-  --sidebar-foreground: #F5F5F5;
-  --sidebar-primary: #C9A84C;
-  --sidebar-primary-foreground: #1A1A1E;
-  --sidebar-accent: #1b212c;
-  --sidebar-accent-foreground: #F5F5F5;
-  --sidebar-border: #212836;
-  --sidebar-ring: #C9A84C;
+  --radius: 0.375rem;
+  --background: #0D0B07;
+  --foreground: #EFE7D8;
+  --card: #161109;
+  --card-foreground: #EFE7D8;
+  --popover: #161109;
+  --popover-foreground: #EFE7D8;
+  --primary: #C8A24B;
+  --primary-foreground: #1B1307;
+  --secondary: #241C10;
+  --secondary-foreground: #EFE7D8;
+  --muted: #241C10;
+  --muted-foreground: #8C8272;
+  --accent: #241C10;
+  --accent-foreground: #EFE7D8;
+  --destructive: #C0705A;
+  --border: #2A2114;
+  --input: #1E1710;
+  --ring: #C8A24B;
+  --chart-1: #C8A24B;
+  --chart-2: #5F8B6E;
+  --chart-3: #8E6B2A;
+  --chart-4: #E3C878;
+  --chart-5: #B4633F;
+  --sidebar: #161109;
+  --sidebar-foreground: #EFE7D8;
+  --sidebar-primary: #C8A24B;
+  --sidebar-primary-foreground: #1B1307;
+  --sidebar-accent: #241C10;
+  --sidebar-accent-foreground: #EFE7D8;
+  --sidebar-border: #2A2114;
+  --sidebar-ring: #C8A24B;
 }
 
 .dark {
-  --background: #0b0e14;
-  --foreground: #F5F5F5;
-  --card: #10141d;
-  --card-foreground: #F5F5F5;
-  --popover: #10141d;
-  --popover-foreground: #F5F5F5;
-  --primary: #C9A84C;
-  --primary-foreground: #1A1A1E;
-  --secondary: #2A2A2E;
-  --secondary-foreground: #F5F5F5;
-  --muted: #2A2A2E;
-  --muted-foreground: #8A8A8E;
-  --accent: #2A2A2E;
-  --accent-foreground: #F5F5F5;
-  --destructive: #EF4444;
-  --border: #1c222e;
-  --input: #212836;
-  --ring: #C9A84C;
-  --chart-1: #C9A84C;
-  --chart-2: #38BDF8;
-  --chart-3: #A68A3E;
-  --chart-4: #D4B96A;
-  --chart-5: #8A8A8E;
-  --sidebar: #10141d;
-  --sidebar-foreground: #F5F5F5;
-  --sidebar-primary: #C9A84C;
-  --sidebar-primary-foreground: #1A1A1E;
-  --sidebar-accent: #1b212c;
-  --sidebar-accent-foreground: #F5F5F5;
-  --sidebar-border: #212836;
-  --sidebar-ring: #C9A84C;
+  --background: #0D0B07;
+  --foreground: #EFE7D8;
+  --card: #161109;
+  --card-foreground: #EFE7D8;
+  --popover: #161109;
+  --popover-foreground: #EFE7D8;
+  --primary: #C8A24B;
+  --primary-foreground: #1B1307;
+  --secondary: #241C10;
+  --secondary-foreground: #EFE7D8;
+  --muted: #241C10;
+  --muted-foreground: #8C8272;
+  --accent: #241C10;
+  --accent-foreground: #EFE7D8;
+  --destructive: #C0705A;
+  --border: #2A2114;
+  --input: #1E1710;
+  --ring: #C8A24B;
+  --chart-1: #C8A24B;
+  --chart-2: #5F8B6E;
+  --chart-3: #8E6B2A;
+  --chart-4: #E3C878;
+  --chart-5: #B4633F;
+  --sidebar: #161109;
+  --sidebar-foreground: #EFE7D8;
+  --sidebar-primary: #C8A24B;
+  --sidebar-primary-foreground: #1B1307;
+  --sidebar-accent: #241C10;
+  --sidebar-accent-foreground: #EFE7D8;
+  --sidebar-border: #2A2114;
+  --sidebar-ring: #C8A24B;
 }
 
 @layer base {
@@ -131,46 +135,51 @@
   html {
     overflow-x: hidden;
   }
+  /* Visible keyboard focus everywhere — required quality floor */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
 }
 
 /* APEXSTORAGE Custom Styles */
 @layer components {
   .gold-gradient {
-    background: linear-gradient(135deg, #C9A84C 0%, #A68A3E 100%);
+    background: linear-gradient(135deg, #E3C878 0%, #C8A24B 45%, #9A7632 100%);
   }
 
   .gold-gradient-text {
-    background: linear-gradient(135deg, #D4B96A 0%, #C9A84C 50%, #A68A3E 100%);
+    background: linear-gradient(135deg, #E3C878 0%, #C8A24B 55%, #9A7632 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
   .vault-card {
-    background: linear-gradient(145deg, rgba(42, 42, 46, 0.8), rgba(26, 26, 30, 0.9));
+    background: linear-gradient(145deg, rgba(36, 28, 16, 0.8), rgba(22, 17, 9, 0.9));
     backdrop-filter: blur(10px);
   }
 
   .input-aurum {
     width: 100%;
     padding: 10px 14px;
-    background-color: #1b212c;
-    border: 1px solid #212836;
-    border-radius: 6px;
-    color: #F5F5F5;
+    background-color: #1E1710;
+    border: 1px solid #2A2114;
+    border-radius: 2px;
+    color: #EFE7D8;
     font-size: 13px;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Work Sans', system-ui, sans-serif;
     outline: none;
     transition: all 0.2s ease;
   }
 
   .input-aurum::placeholder {
-    color: #8A8A8E;
+    color: #8C8272;
   }
 
   .input-aurum:focus {
-    border-color: #C9A84C;
-    box-shadow: 0 0 0 1px #C9A84C;
+    border-color: #C8A24B;
+    box-shadow: 0 0 0 1px #C8A24B;
   }
 
   /* Hide browser-native autofill icons that overlap with placeholder text */
@@ -187,36 +196,38 @@
   input:-webkit-autofill.input-aurum,
   input:-webkit-autofill:hover.input-aurum,
   input:-webkit-autofill:focus.input-aurum {
-    -webkit-text-fill-color: #F5F5F5;
-    -webkit-box-shadow: 0 0 0 1000px #1b212c inset;
+    -webkit-text-fill-color: #EFE7D8;
+    -webkit-box-shadow: 0 0 0 1000px #1E1710 inset;
     transition: background-color 5000s ease-in-out 0s;
-    caret-color: #F5F5F5;
+    caret-color: #EFE7D8;
   }
 
   /* Select dropdown styling for dark theme */
   select.input-aurum {
-    background-color: #1b212c;
+    background-color: #1E1710;
     cursor: pointer;
-    color: #F5F5F5;
+    color: #EFE7D8;
   }
 
   select.input-aurum option {
-    background-color: #1b212c;
-    color: #F5F5F5;
+    background-color: #1E1710;
+    color: #EFE7D8;
     padding: 8px;
   }
 
+  /* Flat, stamped buttons — sharp corners, no glow */
   .btn-gold {
     padding: 12px 24px;
-    background: linear-gradient(135deg, #C9A84C 0%, #A68A3E 100%);
-    color: #1A1A1E;
-    font-weight: 700;
-    border-radius: 4px;
-    letter-spacing: 0.05em;
+    background: linear-gradient(135deg, #E3C878 0%, #C8A24B 55%, #9A7632 100%);
+    color: #1B1307;
+    font-weight: 600;
+    border-radius: 2px;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
-    font-size: 13px;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
+    font-size: 12px;
+    font-family: 'Work Sans', system-ui, sans-serif;
+    transition: filter 0.2s ease, transform 0.15s ease;
+    box-shadow: inset 0 0 0 1px rgba(255, 235, 190, 0.18);
     cursor: pointer;
     border: none;
     display: inline-flex;
@@ -226,19 +237,23 @@
   }
 
   .btn-gold:hover {
-    filter: brightness(1.1);
-    transform: scale(0.98);
+    filter: brightness(1.08);
+  }
+
+  .btn-gold:active {
+    transform: translateY(1px);
   }
 
   .btn-gold-outline {
     padding: 12px 24px;
-    border: 1px solid #C9A84C;
-    color: #C9A84C;
-    border-radius: 4px;
-    letter-spacing: 0.05em;
+    border: 1px solid #C8A24B;
+    color: #E3C878;
+    border-radius: 2px;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Work Sans', system-ui, sans-serif;
     transition: all 0.2s ease;
     cursor: pointer;
     background: transparent;
@@ -249,25 +264,26 @@
   }
 
   .btn-gold-outline:hover {
-    background: #C9A84C;
-    color: #1A1A1E;
+    background: #C8A24B;
+    color: #1B1307;
   }
 
   .btn-ghost {
     padding: 12px 20px;
-    color: #B0B0B4;
+    color: #B9AE9B;
     transition: color 0.2s ease;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
     cursor: pointer;
     background: none;
     border: none;
+    font-family: 'Work Sans', system-ui, sans-serif;
   }
 
   .btn-ghost:hover {
-    color: #C9A84C;
+    color: #E3C878;
   }
 
   .scrollbar-hide::-webkit-scrollbar {
@@ -281,6 +297,8 @@
 
   .nav-link {
     position: relative;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 11px;
   }
 
   .nav-link::after {
@@ -290,7 +308,7 @@
     left: 0;
     width: 0;
     height: 1px;
-    background: #C9A84C;
+    background: #C8A24B;
     transition: width 0.3s ease;
   }
 
@@ -299,15 +317,15 @@
   }
 
   .hero-vault-bg {
-    background: linear-gradient(135deg, #0D0D10 0%, #1A1A1E 40%, #2A2A2E 100%);
+    background: linear-gradient(135deg, #0D0B07 0%, #1B1307 40%, #241C10 100%);
   }
 
   .gold-glow {
-    box-shadow: 0 0 60px rgba(201, 168, 76, 0.15), 0 0 120px rgba(201, 168, 76, 0.05);
+    box-shadow: 0 0 60px rgba(200, 162, 75, 0.1), 0 0 120px rgba(200, 162, 75, 0.04);
   }
 
   .text-glow {
-    text-shadow: 0 0 40px rgba(201, 168, 76, 0.3);
+    text-shadow: 0 0 40px rgba(200, 162, 75, 0.2);
   }
 
   .custom-scrollbar::-webkit-scrollbar {
@@ -315,27 +333,120 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: #2A2A2E;
+    background: #241C10;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #C9A84C;
+    background: #C8A24B;
     border-radius: 3px;
   }
 
+  /* Live indicator — copper patina, not template green */
   .live-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background-color: #22c55e;
+    background-color: #5F8B6E;
     display: inline-block;
     animation: livePulse 2s ease-in-out infinite;
+  }
+
+  /* ── Assay Ledger primitives ─────────────────────────────── */
+
+  /* Record eyebrow: mono label + optional hallmark, the ledger voice */
+  .record-eyebrow {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #C8A24B;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Section headline: engraved-serif display face */
+  .display-head {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #EFE7D8;
+  }
+
+  /* Ledger field: mono key on top, value below (cards read as records) */
+  .ledger-key {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #8C8272;
+  }
+
+  .ledger-val {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    color: #EFE7D8;
+  }
+
+  /* Circular hallmark seal — double ring, mono legend */
+  .hallmark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid rgba(200, 162, 75, 0.6);
+    box-shadow: 0 0 0 3px rgba(200, 162, 75, 0.12), 0 0 0 4px rgba(200, 162, 75, 0.35);
+    color: #C8A24B;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    line-height: 1;
+  }
+
+  /* Square engraved step stamp (real sequences only) */
+  .step-stamp {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: #E3C878;
+    border: 1px solid #C8A24B;
+    background: linear-gradient(135deg, rgba(200, 162, 75, 0.14), rgba(142, 107, 42, 0.08));
+    box-shadow: inset 0 0 0 1px rgba(13, 11, 7, 0.6);
+  }
+
+  /* Parchment assay certificate — the signature element */
+  .assay-cert {
+    background:
+      radial-gradient(120% 90% at 12% 8%, rgba(120, 96, 52, 0.22), transparent 55%),
+      radial-gradient(140% 110% at 90% 95%, rgba(120, 96, 52, 0.18), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(44, 35, 19, 0.035) 0 1px, transparent 1px 3px),
+      #EAE0C8;
+    color: #2C2313;
+    box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.75);
+  }
+
+  .assay-cert .cert-ink {
+    color: #2C2313;
+  }
+
+  .assay-cert .cert-muted {
+    color: #6E5F44;
+  }
+
+  .assay-cert .cert-rule {
+    border-color: rgba(44, 35, 19, 0.28);
+  }
+
+  /* Live price ticker strip */
+  .ticker-track {
+    display: flex;
+    width: max-content;
+    animation: tickerScroll 60s linear infinite;
   }
 
   @media (max-width: 640px) {
     .btn-gold, .btn-gold-outline {
       padding: 10px 18px;
-      font-size: 12px;
+      font-size: 11px;
     }
     .input-aurum {
       padding: 8px 12px;
@@ -346,7 +457,7 @@
 
 @keyframes livePulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  50% { opacity: 0.35; }
 }
 
 @keyframes fadeIn {
@@ -358,6 +469,187 @@
   0% { transform: translateY(30px); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
 }
+
+/* Certificate seal stamps itself in on load */
+@keyframes stampIn {
+  0% { transform: rotate(-14deg) scale(1.6); opacity: 0; }
+  60% { transform: rotate(-4deg) scale(0.96); opacity: 1; }
+  100% { transform: rotate(-6deg) scale(1); opacity: 1; }
+}
+
+@keyframes tickerScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+  .live-dot {
+    animation: none;
+  }
+  [class*="animate-"] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ── Dashboard scope: Assay Ledger typography ─────────────────────────
+   Applies in both themes — the dashboards inherit the landing page's
+   type system: Fraunces display titles, mono card/modal labels, and
+   IBM Plex Mono data tables (the ledger voice).
+────────────────────────────────────────────────────────────────────── */
+.dashboard-scope h1 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-scope h3 {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+.dashboard-scope table {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+/* Every number on the dashboard is ledger data */
+.dashboard-scope .tabular-nums {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+/* ── Dark Mode Overrides (warm vault) ────────────────────────────────
+   Scoped to .dashboard-scope so only the client/admin dashboards are
+   affected; the landing page and auth pages always keep the dark theme.
+   Remaps the dashboards' cool graphite defaults to the warm Assay
+   Ledger palette so they match the landing page.
+   Warm palette:
+     canvas    #0D0B07  (vault black)
+     card      #161109  (panel)
+     elevated  #241C10  (charcoal / hover)
+     hairline  #2A2114  (bronze borders)
+     ink       #EFE7D8  (primary text)
+     muted     #B9AE9B  (secondary text)
+     faint     #8C8272  (tertiary text)
+   Status (mineral, not template): patina #5F8B6E up/live,
+   rust #B4633F down, gold #C8A24B pending/info.
+────────────────────────────────────────────────────────────────────── */
+
+/* Status colors — one shared mineral retone for BOTH themes
+   (patina #5F8B6E up/live, rust #B4633F down, gold #C8A24B pending/info).
+   Only sky/blue/purple (info/processing) differ per theme: light uses the
+   deeper gold #8E6B2A for contrast on white cards, dark uses #E3C878. */
+[data-theme="dark"] .dashboard-scope,
+[data-theme="light"] .dashboard-scope {
+  --color-emerald-400: #5F8B6E;
+  --color-emerald-500: #5F8B6E;
+  --color-green-400: #5F8B6E;
+  --color-green-500: #5F8B6E;
+  --color-teal-400: #5F8B6E;
+  --color-teal-500: #5F8B6E;
+  --color-red-300: #B4633F;
+  --color-red-400: #B4633F;
+  --color-red-500: #B4633F;
+  --color-amber-400: #C8A24B;
+  --color-amber-500: #C8A24B;
+  --color-yellow-500: #C8A24B;
+  --color-gray-500: #8C8272;
+}
+[data-theme="dark"] .dashboard-scope {
+  --color-sky-400: #E3C878;
+  --color-sky-500: #E3C878;
+  --color-blue-400: #E3C878;
+  --color-blue-500: #E3C878;
+  --color-purple-400: #E3C878;
+  --color-purple-500: #E3C878;
+}
+[data-theme="light"] .dashboard-scope {
+  --color-sky-400: #8E6B2A;
+  --color-sky-500: #8E6B2A;
+  --color-blue-400: #8E6B2A;
+  --color-blue-500: #8E6B2A;
+  --color-purple-400: #8E6B2A;
+  --color-purple-500: #8E6B2A;
+}
+
+/* Backgrounds — canvas variants → vault black */
+[data-theme="dark"] .dashboard-scope.bg-\[\#0E1014\],
+[data-theme="dark"] .dashboard-scope.bg-\[\#111114\],
+[data-theme="dark"] .dashboard-scope.bg-\[\#0D1117\],
+[data-theme="dark"] .dashboard-scope.bg-\[\#0b0e14\],
+[data-theme="dark"] .dashboard-scope .bg-\[\#0E1014\],
+[data-theme="dark"] .dashboard-scope .bg-\[\#111114\],
+[data-theme="dark"] .dashboard-scope .bg-\[\#0D1117\],
+[data-theme="dark"] .dashboard-scope .bg-\[\#0b0e14\] { background-color: #0D0B07 !important; }
+[data-theme="dark"] .dashboard-scope.bg-\[\#0E1014\]\/95,
+[data-theme="dark"] .dashboard-scope.bg-\[\#111114\]\/95,
+[data-theme="dark"] .dashboard-scope .bg-\[\#0E1014\]\/95,
+[data-theme="dark"] .dashboard-scope .bg-\[\#111114\]\/95 { background-color: rgba(13,11,7,0.95) !important; }
+
+/* Backgrounds — cards → warm panel */
+[data-theme="dark"] .dashboard-scope .bg-\[\#10141d\],
+[data-theme="dark"] .dashboard-scope .bg-\[\#10141D\],
+[data-theme="dark"] .dashboard-scope .bg-\[\#161B22\] {
+  background-color: #161109 !important;
+}
+
+/* Backgrounds — elevated / hover surfaces → charcoal */
+[data-theme="dark"] .dashboard-scope .bg-\[\#1b212c\] { background-color: #241C10 !important; }
+[data-theme="dark"] .dashboard-scope .bg-\[\#1b212c\]\/50 { background-color: rgba(36,28,16,0.5) !important; }
+[data-theme="dark"] .dashboard-scope .bg-\[\#141A24\] { background-color: #241C10 !important; }
+[data-theme="dark"] .dashboard-scope .bg-\[\#1c222e\],
+[data-theme="dark"] .dashboard-scope .bg-\[\#212836\] { background-color: #241C10 !important; }
+[data-theme="dark"] .dashboard-scope .bg-\[\#2A2A2E\] { background-color: #241C10 !important; }
+
+/* Text — ink / muted hierarchy */
+[data-theme="dark"] .dashboard-scope .text-\[\#F5F5F5\] { color: #EFE7D8 !important; }
+[data-theme="dark"] .dashboard-scope .text-\[\#8A8A8E\],
+[data-theme="dark"] .dashboard-scope .text-\[\#8B949E\] { color: #B9AE9B !important; }
+[data-theme="dark"] .dashboard-scope .text-\[\#5A5A5E\],
+[data-theme="dark"] .dashboard-scope .text-\[\#B0B0B4\],
+[data-theme="dark"] .dashboard-scope .text-\[\#3A3A3E\] { color: #8C8272 !important; }
+[data-theme="dark"] .dashboard-scope .text-\[\#1A1A1E\] { color: #1B1307 !important; }
+
+/* Sky-blue accent (info / view buttons) → gold */
+[data-theme="dark"] .dashboard-scope .text-\[\#38BDF8\] { color: #C8A24B !important; }
+[data-theme="dark"] .dashboard-scope .bg-\[\#38BDF8\]\/10 { background-color: rgba(200,162,75,0.1) !important; }
+[data-theme="dark"] .dashboard-scope .bg-\[\#38BDF8\]\/20 { background-color: rgba(200,162,75,0.2) !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#38BDF8\]\/20 { border-color: rgba(200,162,75,0.2) !important; }
+
+/* Borders — bronze hairlines (incl. opacity variants) */
+[data-theme="dark"] .dashboard-scope .border-\[\#1c222e\],
+[data-theme="dark"] .dashboard-scope .border-\[\#212836\],
+[data-theme="dark"] .dashboard-scope .border-\[\#21262D\],
+[data-theme="dark"] .dashboard-scope .border-\[\#2A2A2E\] { border-color: #2A2114 !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#1c222e\]\/80,
+[data-theme="dark"] .dashboard-scope .border-\[\#212836\]\/80 { border-color: rgba(42,33,20,0.8) !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#1c222e\]\/70,
+[data-theme="dark"] .dashboard-scope .border-\[\#212836\]\/70 { border-color: rgba(42,33,20,0.7) !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#1c222e\]\/60,
+[data-theme="dark"] .dashboard-scope .border-\[\#212836\]\/60,
+[data-theme="dark"] .dashboard-scope .border-\[\#21262D\]\/60 { border-color: rgba(42,33,20,0.6) !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#1c222e\]\/40 { border-color: rgba(42,33,20,0.4) !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#2A2A2E\]\/50,
+[data-theme="dark"] .dashboard-scope .border-\[\#8B949E\]\/50 { border-color: rgba(42,33,20,0.5) !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#2A2A2E\]\/40 { border-color: rgba(42,33,20,0.4) !important; }
+[data-theme="dark"] .dashboard-scope .border-\[\#2A2A2E\]\/30 { border-color: rgba(42,33,20,0.3) !important; }
+
+/* Hover states */
+[data-theme="dark"] .dashboard-scope .hover\:bg-\[\#1b212c\]:hover,
+[data-theme="dark"] .dashboard-scope .hover\:bg-\[\#212836\]:hover { background-color: #241C10 !important; }
+[data-theme="dark"] .dashboard-scope .hover\:text-\[\#F5F5F5\]:hover { color: #EFE7D8 !important; }
+[data-theme="dark"] .dashboard-scope .hover\:border-\[\#8B949E\]:hover { border-color: #B9AE9B !important; }
+
+/* Rings (avatar / badge outlines should match the surface behind them) */
+[data-theme="dark"] .dashboard-scope .ring-\[\#0E1014\],
+[data-theme="dark"] .dashboard-scope .ring-\[\#111114\] { --tw-ring-color: #0D0B07 !important; }
+[data-theme="dark"] .dashboard-scope .ring-\[\#10141d\],
+[data-theme="dark"] .dashboard-scope .ring-\[\#10141D\] { --tw-ring-color: #161109 !important; }
+
+/* Placeholders */
+[data-theme="dark"] .dashboard-scope .placeholder-\[\#8B949E\]::placeholder { color: #8C8272 !important; }
 
 /* ── Light Mode Overrides ─────────────────────────────────────────────
    Scoped to .dashboard-scope so only the client/admin dashboards are
@@ -431,6 +723,7 @@
 
 /* Text — ink / muted hierarchy */
 [data-theme="light"] .dashboard-scope .text-\[\#F5F5F5\] { color: #1A1D24 !important; }
+[data-theme="light"] .dashboard-scope .text-\[\#1A1A1E\] { color: #1A1D24 !important; }
 [data-theme="light"] .dashboard-scope .text-\[\#8A8A8E\],
 [data-theme="light"] .dashboard-scope .text-\[\#8B949E\] { color: #5D6570 !important; }
 [data-theme="light"] .dashboard-scope .text-\[\#5A5A5E\],
@@ -479,6 +772,15 @@
 /* Placeholders */
 [data-theme="light"] .dashboard-scope .placeholder-\[\#8B949E\]::placeholder { color: #8B93A0 !important; }
 
+/* text-white (unreachable by hex remap) → ink on light surfaces */
+[data-theme="light"] .dashboard-scope .text-white { color: #1A1D24 !important; }
+[data-theme="light"] .dashboard-scope .hover\:text-white:hover { color: #1A1D24 !important; }
+/* …but keep it white on status chips (e.g. check icon on patina badge) */
+[data-theme="light"] .dashboard-scope .bg-emerald-500 .text-white,
+[data-theme="light"] .dashboard-scope .bg-emerald-400 .text-white,
+[data-theme="light"] .dashboard-scope .bg-red-500 .text-white,
+[data-theme="light"] .dashboard-scope .bg-amber-500 .text-white { color: #FFFFFF !important; }
+
 /* Form controls */
 [data-theme="light"] .dashboard-scope .input-aurum {
   background-color: #FFFFFF;
@@ -516,4 +818,64 @@
 }
 [data-theme="light"] .dashboard-scope .text-glow {
   text-shadow: 0 0 40px rgba(201,168,76,0.15);
+}
+
+/* ── Responsive ledger tables (phones only) ──────────────────────────
+   Below the sm breakpoint (640px) the wide ledger tables in the client
+   dashboard (Asset Inventory, Order History, Shipment History) collapse
+   into stacked label/value cards so nothing needs horizontal scrolling.
+   Each <td> carries a data-label attribute used as the row label via
+   ::before. Tablet and desktop keep the standard table layout untouched.
+   Colors use the theme variables so both dark and light stay consistent. */
+@media (max-width: 639px) {
+  .dashboard-scope .responsive-table {
+    overflow: visible;
+  }
+  .dashboard-scope .responsive-table table,
+  .dashboard-scope .responsive-table thead,
+  .dashboard-scope .responsive-table tbody,
+  .dashboard-scope .responsive-table tr,
+  .dashboard-scope .responsive-table td {
+    display: block;
+    width: 100%;
+  }
+  .dashboard-scope .responsive-table thead {
+    display: none;
+  }
+  .dashboard-scope .responsive-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+  .dashboard-scope .responsive-table tr {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 12px;
+  }
+  .dashboard-scope .responsive-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 8px 0;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    border-bottom: 1px dashed var(--border);
+  }
+  .dashboard-scope .responsive-table td:last-child {
+    border-bottom: 0;
+  }
+  .dashboard-scope .responsive-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    text-align: left;
+  }
+  .dashboard-scope .responsive-table td > * {
+    min-width: 0;
+  }
 }

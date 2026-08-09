@@ -492,7 +492,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
                   <div className="flex items-start gap-2 p-2 bg-[#1b212c] border border-[#212836] rounded">
                     <svg className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 24 24">
                       <circle cx="12" cy="12" r="10" />
-                      <text x="12" y="16" textAnchor="middle" fontSize="14" fill="#10141d" fontWeight="bold">i</text>
+                      <text x="12" y="16" textAnchor="middle" fontSize="14" fill="#1B1307" fontWeight="bold">i</text>
                     </svg>
                     <p className="text-[9px] text-[#8A8A8E]">Fees non-refundable once confirmed.</p>
                   </div>

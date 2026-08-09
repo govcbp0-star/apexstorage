@@ -10,10 +10,16 @@
   },
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build",
+    "build": "next build && node scripts/check-jose-cjs.mjs --bundle && node scripts/check-mineral-css.mjs --compiled",
     "build:standalone": "next build && node scripts/copy-standalone-assets.mjs",
     "start": "node .next/standalone/server.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "check:jose": "node scripts/check-jose-cjs.mjs",
+    "check:css": "node scripts/check-mineral-css.mjs",
+    "postinstall": "node scripts/check-jose-cjs.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:demo:clean": "node scripts/seed-demo.mjs clean",
+    "seed:demo:reseed": "node scripts/seed-demo.mjs reseed"
   },
   "dependencies": {
     "@radix-ui/react-toast": "^1.2.14",

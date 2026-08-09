@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
 import Sidebar from '@/components/layout/Sidebar';
@@ -166,6 +166,17 @@ function notificationTime(...values: Array<string | undefined>): string {
   return values.find((value) => value && !Number.isNaN(new Date(value).getTime())) || new Date(0).toISOString();
 }
 
+/**
+ * Compact, distinguishable record ID: shows short IDs in full, and long IDs
+ * as head+tail (first 10 + ellipsis + last 4) so records that share a
+ * prefix — e.g. same-second Firebase IDs — still read as distinct. The full
+ * ID is always exposed as a hover tooltip via `title`.
+ */
+function shortId(id: string | undefined | null): string {
+  if (!id) return '—';
+  return id.length > 16 ? `${id.slice(0, 10)}…${id.slice(-4)}` : id;
+}
+
 function buildClientNotifications({
   assets,
   orders,
@@ -273,7 +284,7 @@ function NotificationGlyph({ kind }: { kind: NotificationKind }) {
 // ── Small presentational primitives ──────────────────────────────────
 function SectionLabel({children, className}: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={cn('text-[10px] font-bold tracking-[0.22em] text-[#C9A84C] uppercase', className)}>
+    <span className={cn('text-[10px] font-bold tracking-[0.22em] text-[#C9A84C] uppercase font-mono', className)}>
       {children}
     </span>
   );
@@ -323,6 +334,16 @@ export default function ClientDashboard() {
   const { authRole, userProfile, user, loading: authLoading, pending2FA, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Sub-views are real URL routes (e.g. /dashboard/client/holdings): the last
+  // path segment drives activeNav so sub-pages are deep-linkable, shareable,
+  // and survive refresh. Unknown slugs fall back to the dashboard.
+  const CLIENT_NAV_IDS = ['dashboard', 'holdings', 'orders', 'shipments', 'transactions', 'vault', 'analytics'];
+  const activeNav = CLIENT_NAV_IDS.includes(pathname.split('/').pop() || '') ? (pathname.split('/').pop() as string) : 'dashboard';
+  const navigateTo = useCallback((nav: string) => {
+    if (CLIENT_NAV_IDS.includes(nav)) router.push(`/dashboard/client/${nav}`);
+  }, [router]);
 
   const [transitionLoading, setTransitionLoading] = useState(true);
   useEffect(() => {
@@ -332,7 +353,6 @@ export default function ClientDashboard() {
 
   // Navigation state
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeNav, setActiveNav] = useState('dashboard');
 
   // Gold price state
   const [goldSpotPrice, setGoldSpotPrice] = useState(4744.08);
@@ -809,7 +829,7 @@ export default function ClientDashboard() {
             <a href="/" className="flex items-center gap-2.5 group">
               <svg className="w-7 h-7" viewBox="0 0 40 40" fill="none">
                 <path d="M20 4L4 36h8l8-16 8 16h8L20 4z" fill="url(#dLogoGrad)" opacity="0.92" />
-                <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#0E1014" />
+                <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#0D0B07" />
                 <circle cx="20" cy="20" r="2.5" fill="#C9A84C" />
                 <defs>
                   <linearGradient id="dLogoGrad" x1="4" y1="4" x2="36" y2="36">
@@ -818,7 +838,7 @@ export default function ClientDashboard() {
                   </linearGradient>
                 </defs>
               </svg>
-              <div className="flex flex-col leading-none">
+              <div className="flex flex-col leading-none hidden min-[375px]:block">
                 <span className="text-[13px] font-bold tracking-[0.18em] text-[#F5F5F5]">APEXSTORAGE</span>
               </div>
             </a>
@@ -926,7 +946,7 @@ export default function ClientDashboard() {
                                   onClick={() => {
                                     markNotificationRead(notification.id);
                                     setNotificationOpen(false);
-                                    if (notification.nav) setActiveNav(notification.nav);
+                                    if (notification.nav) navigateTo(notification.nav);
                                   }}
                                   className={cn(
                                     'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[#1b212c]',
@@ -1018,7 +1038,7 @@ export default function ClientDashboard() {
       <Sidebar
         type="client"
         activeNav={activeNav}
-        onNavChange={setActiveNav}
+        onNavChange={navigateTo}
         sidebarOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onOpenProfile={() => setProfileOpen(true)}
@@ -1119,7 +1139,7 @@ export default function ClientDashboard() {
           {activeNav === 'dashboard' && (
             <>
               {/* KPI cards */}
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
+              <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4 mb-6">
                 {/* Portfolio Value */}
                 <div className="relative bg-[#10141D] border border-[#C9A84C]/25 rounded-lg p-3 sm:p-4 overflow-hidden">
                   <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#C9A84C]/70 to-transparent" />
@@ -1160,7 +1180,7 @@ export default function ClientDashboard() {
                 </div>
 
                 {/* Pending */}
-                <button onClick={() => setActiveNav('orders')} className="text-left relative bg-[#10141D] border border-[#1c222e] rounded-lg p-3 sm:p-4 hover:border-[#C9A84C]/40 transition-colors group">
+                <button onClick={() => navigateTo('orders')} className="text-left relative bg-[#10141D] border border-[#1c222e] rounded-lg p-3 sm:p-4 hover:border-[#C9A84C]/40 transition-colors group">
                   <p className="text-[8px] sm:text-[9px] font-bold tracking-[0.2em] text-[#5A5A5E] uppercase">Pending</p>
                   <p className="text-2xl font-bold text-[#C9A84C] tabular-nums tracking-tight mt-2">{pendingCount}</p>
                   <p className="text-[9px] text-[#5A5A5E] tracking-wide uppercase mt-2 flex items-center gap-1">
@@ -1189,7 +1209,7 @@ export default function ClientDashboard() {
                 <div className="bg-[#10141D] border border-[#1c222e] rounded-lg p-3 sm:p-4 lg:col-span-2 min-w-0">
                   <CardHeader
                     title="Holdings"
-                    action={<button onClick={() => setActiveNav('holdings')} className="text-[9px] sm:text-[10px] text-[#C9A84C] hover:underline tracking-[0.15em] uppercase whitespace-nowrap">View All</button>}
+                    action={<button onClick={() => navigateTo('holdings')} className="text-[9px] sm:text-[10px] text-[#C9A84C] hover:underline tracking-[0.15em] uppercase whitespace-nowrap">View All</button>}
                   />
                   <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4">
                     <div className="bg-[#0E1014] border border-[#1c222e] rounded-md p-2.5 sm:p-3">
@@ -1353,7 +1373,7 @@ export default function ClientDashboard() {
                     }
                   />
                   {holdingsAssets.length > 0 ? (
-                    <div className="overflow-x-auto custom-scrollbar">
+                    <div className="overflow-x-auto custom-scrollbar responsive-table">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-[#1c222e]">
@@ -1370,12 +1390,12 @@ export default function ClientDashboard() {
                             const value = Math.round((asset.weight / 31.1035) * goldSpotPrice);
                             return (
                               <tr key={asset.id} className="border-b border-[#1c222e]/40 hover:bg-white/[0.015] transition-colors">
-                                <td className="py-2.5 pr-3 font-mono text-[11px] text-[#F5F5F5] whitespace-nowrap">{asset.ref}</td>
-                                <td className="py-2.5 pr-3 text-[#F5F5F5]">{asset.type === 'bar' ? 'Bar' : asset.type === 'coin' ? 'Coin' : 'Jewellery'}</td>
-                                <td className="py-2.5 pr-3 text-right text-[#F5F5F5] tabular-nums">{asset.weight}<span className="text-[#5A5A5E] ml-0.5 text-[10px]">g</span></td>
-                                <td className="py-2.5 pr-3 text-right text-[#C9A84C] font-semibold tabular-nums">${value.toLocaleString()}</td>
-                                <td className="py-2.5 pr-3 text-[#8A8A8E] capitalize">{asset.vaultLocation || '—'}</td>
-                                <td className="py-2.5"><StatusBadge status={asset.status === 'active' ? 'added' : asset.status} /></td>
+                                <td data-label="Ref" className="py-2.5 pr-3 font-mono text-[11px] text-[#F5F5F5] whitespace-nowrap">{asset.ref}</td>
+                                <td data-label="Type" className="py-2.5 pr-3 text-[#F5F5F5]">{asset.type === 'bar' ? 'Bar' : asset.type === 'coin' ? 'Coin' : 'Jewellery'}</td>
+                                <td data-label="Weight" className="py-2.5 pr-3 text-right text-[#F5F5F5] tabular-nums">{asset.weight}<span className="text-[#5A5A5E] ml-0.5 text-[10px]">g</span></td>
+                                <td data-label="Value" className="py-2.5 pr-3 text-right text-[#C9A84C] font-semibold tabular-nums">${value.toLocaleString()}</td>
+                                <td data-label="Vault" className="py-2.5 pr-3 text-[#8A8A8E] capitalize">{asset.vaultLocation || '—'}</td>
+                                <td data-label="Status" className="py-2.5"><StatusBadge status={asset.status === 'active' ? 'added' : asset.status} /></td>
                               </tr>
                             );
                           })}
@@ -1407,7 +1427,7 @@ export default function ClientDashboard() {
             <div className="bg-[#10141D] border border-[#1c222e] rounded-lg p-4 min-w-0">
               <CardHeader title="Order History" caption="All buy / sell orders" />
               {orders.length > 0 ? (
-                <div className="overflow-x-auto custom-scrollbar">
+                <div className="overflow-x-auto custom-scrollbar responsive-table">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-[#1c222e]">
@@ -1424,14 +1444,14 @@ export default function ClientDashboard() {
                     <tbody>
                       {orders.map((order) => (
                         <tr key={order.id} className="border-b border-[#1c222e]/40 hover:bg-white/[0.015] transition-colors">
-                          <td className="py-2.5 pr-3 font-mono text-[11px] text-[#8A8A8E] whitespace-nowrap">{order.id.slice(0, 8)}</td>
-                          <td className="py-2.5 pr-3 text-[#F5F5F5]">{order.type}</td>
-                          <td className="py-2.5 pr-3 text-[#F5F5F5] capitalize">{order.productType || '—'}</td>
-                          <td className="py-2.5 pr-3 text-right text-[#F5F5F5] tabular-nums">{order.quantityGrams}<span className="text-[#5A5A5E] ml-0.5 text-[10px]">g</span></td>
-                          <td className="py-2.5 pr-3 text-right text-[#C9A84C] font-semibold tabular-nums">${(order.estimatedTotal || 0).toLocaleString()}</td>
-                          <td className="py-2.5 pr-3 text-[#8A8A8E] capitalize">{order.vault || '—'}</td>
-                          <td className="py-2.5 pr-3"><StatusBadge status={order.status} /></td>
-                          <td className="py-2.5 text-[#5A5A5E] whitespace-nowrap tabular-nums">{order.date}</td>
+                          <td data-label="ID" className="py-2.5 pr-3 font-mono text-[11px] text-[#8A8A8E] whitespace-nowrap" title={order.id}>{shortId(order.id)}</td>
+                          <td data-label="Type" className="py-2.5 pr-3 text-[#F5F5F5]">{order.type}</td>
+                          <td data-label="Product" className="py-2.5 pr-3 text-[#F5F5F5] capitalize">{order.productType || '—'}</td>
+                          <td data-label="Quantity" className="py-2.5 pr-3 text-right text-[#F5F5F5] tabular-nums">{order.quantityGrams}<span className="text-[#5A5A5E] ml-0.5 text-[10px]">g</span></td>
+                          <td data-label="Total" className="py-2.5 pr-3 text-right text-[#C9A84C] font-semibold tabular-nums">${(order.estimatedTotal || 0).toLocaleString()}</td>
+                          <td data-label="Vault" className="py-2.5 pr-3 text-[#8A8A8E] capitalize">{order.vault || '—'}</td>
+                          <td data-label="Status" className="py-2.5 pr-3"><StatusBadge status={order.status} /></td>
+                          <td data-label="Date" className="py-2.5 text-[#5A5A5E] whitespace-nowrap tabular-nums">{order.date}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1471,7 +1491,7 @@ export default function ClientDashboard() {
             <div className="bg-[#10141D] border border-[#1c222e] rounded-lg p-4 min-w-0">
               <CardHeader title="Shipment History" caption="Insured delivery requests" />
               {shipments.length > 0 ? (
-                <div className="overflow-x-auto custom-scrollbar">
+                <div className="overflow-x-auto custom-scrollbar responsive-table">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-[#1c222e]">
@@ -1487,13 +1507,13 @@ export default function ClientDashboard() {
                     <tbody>
                       {shipments.map((shipment) => (
                         <tr key={shipment.id} className="border-b border-[#1c222e]/40 hover:bg-white/[0.015] transition-colors">
-                          <td className="py-2.5 pr-3 font-mono text-[11px] text-[#8A8A8E] whitespace-nowrap">{shipment.id.slice(0, 8)}</td>
-                          <td className="py-2.5 pr-3 font-mono text-[11px] text-[#F5F5F5] whitespace-nowrap">{shipment.assetRef}</td>
-                          <td className="py-2.5 pr-3 text-[#F5F5F5]">{shipment.shippingAmount === 'ship_full' ? 'Full' : 'Partial'}</td>
-                          <td className="py-2.5 pr-3 text-right text-[#F5F5F5] tabular-nums">{shipment.weight}<span className="text-[#5A5A5E] ml-0.5 text-[10px]">g</span></td>
-                          <td className="py-2.5 pr-3 text-[#8A8A8E]">{shipment.deliveryCity}{shipment.deliveryCountry ? `, ${shipment.deliveryCountry}` : ''}</td>
-                          <td className="py-2.5 pr-3"><StatusBadge status={shipment.status} /></td>
-                          <td className="py-2.5 text-[#5A5A5E] whitespace-nowrap tabular-nums">{shipment.date}</td>
+                          <td data-label="ID" className="py-2.5 pr-3 font-mono text-[11px] text-[#8A8A8E] whitespace-nowrap" title={shipment.id}>{shortId(shipment.id)}</td>
+                          <td data-label="Asset Ref" className="py-2.5 pr-3 font-mono text-[11px] text-[#F5F5F5] whitespace-nowrap">{shipment.assetRef}</td>
+                          <td data-label="Type" className="py-2.5 pr-3 text-[#F5F5F5]">{shipment.shippingAmount === 'ship_full' ? 'Full' : 'Partial'}</td>
+                          <td data-label="Weight" className="py-2.5 pr-3 text-right text-[#F5F5F5] tabular-nums">{shipment.weight}<span className="text-[#5A5A5E] ml-0.5 text-[10px]">g</span></td>
+                          <td data-label="Destination" className="py-2.5 pr-3 text-[#8A8A8E]">{shipment.deliveryCity}{shipment.deliveryCountry ? `, ${shipment.deliveryCountry}` : ''}</td>
+                          <td data-label="Status" className="py-2.5 pr-3"><StatusBadge status={shipment.status} /></td>
+                          <td data-label="Date" className="py-2.5 text-[#5A5A5E] whitespace-nowrap tabular-nums">{shipment.date}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1576,7 +1596,7 @@ export default function ClientDashboard() {
                       <tbody>
                         {vaultRequestsForLocation.map((request) => (
                           <tr key={request.id} className="border-b border-[#1c222e]/40 hover:bg-white/[0.015] transition-colors">
-                            <td className="py-2.5 pr-3 font-mono text-[11px] text-[#8A8A8E] whitespace-nowrap">{request.id.slice(0, 8)}</td>
+                            <td className="py-2.5 pr-3 font-mono text-[11px] text-[#8A8A8E] whitespace-nowrap" title={request.id}>{shortId(request.id)}</td>
                             <td className="py-2.5 pr-3 text-[#F5F5F5]">{request.location}</td>
                             <td className="py-2.5 pr-3 text-[#F5F5F5] capitalize">{request.storageType}</td>
                             <td className="py-2.5 pr-3 text-right text-[#F5F5F5] tabular-nums">{request.quantity}<span className="text-[#5A5A5E] ml-0.5 text-[10px]">g</span></td>
@@ -1614,7 +1634,7 @@ export default function ClientDashboard() {
                   <CardHeader title="Monthly Returns" caption="Portfolio performance · last 6 months" />
                   <div className="flex gap-4 mb-3">
                     <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: '#C9A84C' }} /><span className="text-[9px] sm:text-[10px] text-[#5A5A5E]">Gain</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: '#EF4444' }} /><span className="text-[9px] sm:text-[10px] text-[#5A5A5E]">Loss</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: '#B4633F' }} /><span className="text-[9px] sm:text-[10px] text-[#5A5A5E]">Loss</span></div>
                   </div>
                   <div className="h-36">
                     <ReturnsBar data={returnsData} labels={returnsLabels} />
@@ -1657,7 +1677,7 @@ function DashboardLoader() {
         <div className="relative mb-8 animate-pulse">
           <svg className="w-16 h-16 drop-shadow-[0_0_15px_rgba(201,168,76,0.3)]" viewBox="0 0 40 40" fill="none">
             <path d="M20 4L4 36h8l8-16 8 16h8L20 4z" fill="url(#loaderLogoGrad)" opacity="0.95" />
-            <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#0E1014" />
+            <path d="M20 12l-10 20h4l6-12 6 12h4L20 12z" fill="#0D0B07" />
             <circle cx="20" cy="20" r="2.5" fill="#C9A84C" />
             <defs>
               <linearGradient id="loaderLogoGrad" x1="4" y1="4" x2="36" y2="36">

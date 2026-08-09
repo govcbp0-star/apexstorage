@@ -95,6 +95,7 @@ workspace/
 │   └── lib/                     # Firebase, auth context, RTDB services, gold price, NOWPayments, utils
 ├── public/                      # Static assets (favicon, hero & vault images, logo, robots)
 ├── scripts/copy-standalone-assets.mjs   # Post-build step for `next start` standalone
+├── scripts/seed-demo.mjs                # Dev utility: seed / clean / reseed demo account
 ├── Caddyfile                    # Reverse proxy on :81 -> :3000 (or ?XTransformPort= for dev port)
 ├── components.json              # shadcn/ui config
 ├── next.config.ts               # `output: "standalone"`
@@ -173,6 +174,20 @@ npm start          # Serve the standalone build
 ```
 
 `npm run build` invokes `scripts/copy-standalone-assets.mjs` to copy `public/` and `.next/static/` into the standalone output so `node .next/standalone/server.js` can serve the app on its own.
+
+### Demo data & reseeding
+
+`scripts/seed-demo.mjs` is the dev utility for the `demo@apex.demo` client account. It creates/refreshes the Firebase Auth user and seeds RTDB with a realistic history (3 assets, 5 orders incl. a sell order and a cancelled one, 4 transactions incl. a refund, 2 shipments incl. a pending one, 1 vault request, profile) whose timestamps are relative to "now" on every run — every status the client dashboard and admin approvals/operations UI can show is represented.
+
+```bash
+npm run seed:demo          # create/refresh demo user + seed data
+npm run seed:demo:clean    # wipe ONLY the demo user's records (no re-seed)
+npm run seed:demo:reseed   # wipe demo records to a known-good empty state, then re-seed
+```
+
+The `clean`/`reseed` wipe is **ownership-based**: it removes every record across `assets`, `orders`, `transactions`, `shipments`, `vaultRequests` that matches the demo user by `userId` / `userEmail` / `owner` (plus the deterministic `demo_*` keys), and deletes `users/{uid}`. That means records created while manually testing checkout, the shipment wizard, or vault requests — which get push-generated keys — are purged too, so `reseed` always lands the demo account in a reproducible state.
+
+All commands are idempotent and only ever touch records owned by `demo@apex.demo`; they never affect other users or the admin collections.
 
 ---
 

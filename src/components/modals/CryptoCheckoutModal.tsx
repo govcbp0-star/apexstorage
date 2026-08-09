@@ -16,10 +16,10 @@ interface CryptoCheckoutModalProps {
 }
 
 const CRYPTO_OPTIONS = [
-  { id: 'usdterc20', name: 'USDT', desc: 'Tether USD (ERC20)', icon: 'T', color: '#26A17B' },
-  { id: 'btc', name: 'BTC', desc: 'Bitcoin', icon: '₿', color: '#F7931A' },
-  { id: 'eth', name: 'ETH', desc: 'Ethereum', icon: 'Ξ', color: '#627EEA' },
-  { id: 'usdc', name: 'USDC', desc: 'USD Coin', icon: '$', color: '#2775CA' },
+  { id: 'usdterc20', name: 'USDT', desc: 'Tether USD (ERC20)', icon: 'T', color: '#5F8B6E' },
+  { id: 'btc', name: 'BTC', desc: 'Bitcoin', icon: '₿', color: '#C8A24B' },
+  { id: 'eth', name: 'ETH', desc: 'Ethereum', icon: 'Ξ', color: '#E3C878' },
+  { id: 'usdc', name: 'USDC', desc: 'USD Coin', icon: '$', color: '#8E6B2A' },
 ];
 
 export function CryptoCheckoutModal({
@@ -227,7 +227,7 @@ export function CryptoCheckoutModal({
             <div className="flex-1">
               <p className="text-[8px] text-[#8B949E] font-semibold uppercase tracking-wider mb-0.5">Amount Due</p>
               <div className="flex items-baseline gap-1">
-                <span className="text-xl font-bold text-[#F2A900]">${amount.toFixed(2)}</span>
+                <span className="text-xl font-bold text-[#C8A24B]">${amount.toFixed(2)}</span>
                 <span className="text-[8px] font-semibold text-[#8B949E] bg-[#161B22] px-1 py-0.5 rounded">USD</span>
               </div>
             </div>
@@ -238,7 +238,7 @@ export function CryptoCheckoutModal({
                 <select
                   value={selectedCrypto}
                   onChange={(e) => setSelectedCrypto(e.target.value)}
-                  className="w-full appearance-none bg-[#161B22] border border-[#F2A900]/50 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-[#F2A900] transition-colors pl-7"
+                  className="w-full appearance-none bg-[#161B22] border border-[#C8A24B]/50 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-[#C8A24B] transition-colors pl-7"
                 >
                   {CRYPTO_OPTIONS.map(opt => (
                     <option key={opt.id} value={opt.id}>{opt.name}</option>
@@ -270,7 +270,7 @@ export function CryptoCheckoutModal({
                  id="add-secondary-email"
                  checked={showSecondary}
                  onChange={(e) => setShowSecondary(e.target.checked)}
-                 className="w-3 h-3 rounded border-[#21262D] bg-[#161B22] text-[#F2A900] focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                 className="w-3 h-3 rounded border-[#21262D] bg-[#161B22] text-[#C8A24B] focus:ring-0 focus:ring-offset-0 cursor-pointer"
                />
                <label htmlFor="add-secondary-email" className="text-[9px] text-[#8B949E] hover:text-white transition-colors cursor-pointer select-none">
                  Add secondary notification email
@@ -283,7 +283,7 @@ export function CryptoCheckoutModal({
                  value={secondaryEmail}
                  onChange={(e) => setSecondaryEmail(e.target.value)}
                  onBlur={() => saveEmailsToFirebase(secondaryEmail)}
-                 className="w-full bg-[#161B22] border border-[#21262D] rounded-lg px-3 py-1 text-[11px] text-white placeholder-[#8B949E] focus:outline-none focus:border-[#F2A900] transition-colors mt-1.5"
+                 className="w-full bg-[#161B22] border border-[#21262D] rounded-lg px-3 py-1 text-[11px] text-white placeholder-[#8B949E] focus:outline-none focus:border-[#C8A24B] transition-colors mt-1.5"
                />
              )}
           </div>
@@ -292,7 +292,7 @@ export function CryptoCheckoutModal({
           <div className="bg-[#161B22] border border-[#21262D] rounded-xl p-2.5">
             {isLoading || !paymentData ? (
               <div className="flex flex-col items-center justify-center py-6">
-                <Loader2 className="w-5 h-5 animate-spin text-[#F2A900] mb-2" />
+                <Loader2 className="w-5 h-5 animate-spin text-[#C8A24B] mb-2" />
                 <p className="text-[10px] text-[#8B949E]">Generating payment details...</p>
               </div>
             ) : paymentStatus === 'success' ? (
@@ -317,7 +317,7 @@ export function CryptoCheckoutModal({
                 {/* Address Box */}
                 <div className="w-full flex items-center bg-[#0D1117] border border-[#21262D] rounded-lg px-2 py-1.5 mb-1.5 group hover:border-[#8B949E]/50 transition-colors cursor-pointer" onClick={() => copyToClipboard(paymentData.pay_address)}>
                   <p className="text-[9px] text-white font-mono font-bold truncate flex-1 mr-2">{paymentData.pay_address}</p>
-                  {copiedAddress ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" /> : <Copy className="w-3 h-3 text-[#F2A900] shrink-0" />}
+                  {copiedAddress ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" /> : <Copy className="w-3 h-3 text-[#C8A24B] shrink-0" />}
                 </div>
 
                 {/* Details Grid */}
@@ -338,7 +338,7 @@ export function CryptoCheckoutModal({
 
                 {/* Info */}
                 <div className="w-full flex items-center justify-center gap-1">
-                  <Info className="w-2.5 h-2.5 text-[#F2A900]" />
+                  <Info className="w-2.5 h-2.5 text-[#C8A24B]" />
                   <span className="text-[8px] text-[#8B949E]">Send exact amount. Confirmed automatically.</span>
                 </div>
               </div>
@@ -354,13 +354,13 @@ export function CryptoCheckoutModal({
               <Timer className="w-3.5 h-3.5 text-[#8B949E]" />
               <div className="flex flex-col">
                  <span className="text-[8px] text-[#8B949E]">Expires in</span>
-                 <span className="text-[11px] font-bold text-[#F2A900]">{timeLeft}</span>
+                 <span className="text-[11px] font-bold text-[#C8A24B]">{timeLeft}</span>
               </div>
             </div>
             
             <button 
               onClick={handleManualCheck}
-              className="px-3.5 py-1.5 border border-[#F2A900] text-[#F2A900] text-[9px] font-bold rounded-lg hover:bg-[#F2A900]/10 transition-colors"
+              className="px-3.5 py-1.5 border border-[#C8A24B] text-[#C8A24B] text-[9px] font-bold rounded-lg hover:bg-[#C8A24B]/10 transition-colors"
             >
               I'VE PAID
             </button>

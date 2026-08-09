@@ -29,7 +29,7 @@ export default function GrowthBar({ data, labels }: GrowthBarProps) {
     datasets: [
       {
         data,
-        backgroundColor: data.map((v) => (v >= 0 ? '#C9A84C' : '#EF4444')),
+        backgroundColor: data.map((v) => (v >= 0 ? '#C9A84C' : '#B4633F')),
         borderRadius: 2,
         barThickness: 14,
       },

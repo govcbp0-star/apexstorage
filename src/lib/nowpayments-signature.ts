@@ -14,9 +14,30 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  */
 type WebhookBody = object;
 
-/** Reconstruct the canonical body string NOWPayments signs (sorted keys). */
+/**
+ * Rebuild a value with all object keys sorted recursively (arrays keep their
+ * element order). Matches the canonical form NOWPayments signs — their docs'
+ * Node.js `sortObject`, PHP `tksort`, and Python `json.dumps(sort_keys=True)`
+ * examples all sort nested objects, not just the top level.
+ */
+function sortKeysRecursively(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortKeysRecursively);
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = sortKeysRecursively((value as Record<string, unknown>)[key]);
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+/** Reconstruct the canonical body string NOWPayments signs (recursively sorted keys). */
 export function buildWebhookSignatureBody(body: WebhookBody): string {
-  return JSON.stringify(body, Object.keys(body).sort());
+  return JSON.stringify(sortKeysRecursively(body));
 }
 
 /** Compute the expected HMAC-SHA512 hex signature for a webhook body. */

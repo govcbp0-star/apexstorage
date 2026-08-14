@@ -48,6 +48,28 @@ describe('buildWebhookSignatureBody', () => {
     assert.ok(canonical.startsWith('{"order_id":'));
     assert.ok(canonical.indexOf('"pay_amount"') < canonical.indexOf('"payment_id"'));
   });
+
+  it('recursively sorts nested object keys (matches the official sortObject example)', () => {
+    // The payment IPN example in NOWPayments' docs carries a nested `fee`
+    // object. The array-replacer form JSON.stringify(body, sortedKeys) would
+    // whitelist nested keys away and sign "fee":{} — a silent 401 for real
+    // webhooks. The canonical form must preserve and sort the nested keys.
+    const withFee = {
+      payment_id: 123,
+      fee: { withdrawalFee: 0, currency: 'btc', serviceFee: 0, depositFee: 0.0985 },
+    };
+    const canonical = buildWebhookSignatureBody(withFee);
+    assert.equal(
+      canonical,
+      '{"fee":{"currency":"btc","depositFee":0.0985,"serviceFee":0,"withdrawalFee":0},"payment_id":123}'
+    );
+  });
+
+  it('preserves array element order while sorting keys inside each element', () => {
+    const withArray = { z: 1, list: [{ b: 2, a: 1 }, { d: 4, c: 3 }] };
+    const canonical = buildWebhookSignatureBody(withArray);
+    assert.equal(canonical, '{"list":[{"a":1,"b":2},{"c":3,"d":4}],"z":1}');
+  });
 });
 
 describe('computeWebhookSignature / verifyWebhookSignature', () => {

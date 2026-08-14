@@ -18,9 +18,18 @@ export interface Shipment {
   deliveryCountry: string;
   weight: number;
   shipmentFee?: number;
+  /** Human-readable vault location (e.g. "Zurich") captured at creation — used by the shipment email. */
+  vaultLocation?: string;
+  /** Locked gold price (USD/oz) used for the fee calculation at creation — persisted source of truth. */
+  goldPrice?: number;
+  /** Asset value in USD at creation, based on the locked gold price — persisted source of truth. */
+  goldValue?: number;
   paymentMethod?: string;
   paymentStatus?: string;
   paidAt?: string;
+  /** Idempotency marker — set by the server once the shipment notification email has been delivered. */
+  notificationEmailSent?: boolean;
+  emailSentAt?: string;
   status: string; // pending | approved | rejected | shipped
   date: string;
   createdAt: string;
@@ -45,6 +54,9 @@ export async function submitShipment(data: {
   deliveryCountry: string;
   weight: number;
   shipmentFee?: number;
+  vaultLocation?: string;
+  goldPrice?: number;
+  goldValue?: number;
   paymentMethod?: string;
   paymentStatus?: string;
   shipmentId?: string;
@@ -70,6 +82,9 @@ export async function submitShipment(data: {
     deliveryCountry: data.deliveryCountry.trim(),
     weight: data.weight,
     shipmentFee: data.shipmentFee,
+    vaultLocation: data.vaultLocation,
+    goldPrice: data.goldPrice,
+    goldValue: data.goldValue,
     paymentMethod: data.paymentMethod,
     paymentStatus: data.paymentStatus,
     status: 'pending',

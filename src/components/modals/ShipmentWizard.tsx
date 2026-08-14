@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { submitShipment } from '@/lib/shipments-service';
 import { submitTransaction } from '@/lib/transactions-service';
+import { SHIPMENT_FEE_RATE, SHIPMENT_FEE_RATE_LABEL } from '@/lib/constants';
 import { CryptoCheckoutModal } from './CryptoCheckoutModal';
 
 interface Asset {
@@ -59,10 +60,14 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
 
   const lockedGoldPriceRef = useRef<number | null>(null);
   const prevInputKeyRef = useRef<string>('');
+  // Id of the persisted shipment record — used to send the notification
+  // email once the payment for this shipment is confirmed.
+  const shipmentIdRef = useRef<string | null>(null);
 
   const handleClose = () => {
     setStep(1);
     setLoading(false);
+    shipmentIdRef.current = null;
     lockedGoldPriceRef.current = null;
     setForm({ assetType: '', assetId: '', shippingAmount: '', partialGrams: '', deliveryName: '', deliveryPhone: '', deliveryAddress: '', deliveryCity: '', deliveryPostcode: '', deliveryCountry: '', agreedTerms: false });
     onClose();
@@ -70,6 +75,27 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
 
   const updateField = (field: string, value: string | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Send the branded shipment notification (primary + secondary email) once
+  // the payment for this shipment is confirmed. Best-effort and idempotent
+  // server-side — a failure here must never block the confirmed flow.
+  const notifyShipment = (secondaryEmail?: string) => {
+    const createdShipmentId = shipmentIdRef.current;
+    if (!createdShipmentId || !user) return;
+    user
+      .getIdToken()
+      .then((idToken) =>
+        fetch('/api/shipments/notify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ shipmentId: createdShipmentId, secondaryEmail: secondaryEmail || '' }),
+        })
+      )
+      .catch((err) => console.error('[ShipmentWizard] Shipment notification failed:', err));
   };
 
   const validatePhone = (s: string) => {
@@ -169,10 +195,10 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
         const assetRef = selectedGroup?.assets.map((a) => a.ref).filter(Boolean).join(', ') || selectedGroup?.label || '';
         const assetId = selectedGroup?.assets.map((a) => a.id).filter(Boolean).join(',') || form.assetId;
 
-        // Calculate shipment fee: 0.25% of the asset's value based on locked gold price
-        // Formula: (weight_grams / 31.1035 oz_per_gram) * goldSpotPrice * 0.25%
+        // Calculate shipment fee: 0.15% of the asset's value based on locked gold price
+        // Formula: (weight_grams / 31.1035 oz_per_gram) * goldSpotPrice * 0.15%
         const assetValueInUSD = (weight / 31.1035) * effectiveGoldPrice;
-        const shipmentFee = Math.ceil(assetValueInUSD * 0.0025); // 0.25% fee, rounded up to nearest whole number
+        const shipmentFee = Math.ceil(assetValueInUSD * SHIPMENT_FEE_RATE); // 0.15% fee, rounded up to nearest whole number
 
         const shipmentId = `${user?.uid || 'user'}_shipment_${Date.now()}`;
 
@@ -192,6 +218,12 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
           deliveryCountry: form.deliveryCountry,
           weight,
           shipmentFee,
+          // Persist the values used to compute the fee so the shipment
+          // notification email can render the exact locked price / value
+          // from the record itself instead of recalculating.
+          vaultLocation: selectedGroup?.label || '',
+          goldPrice: effectiveGoldPrice,
+          goldValue: Math.round(assetValueInUSD * 100) / 100,
           shipmentId,
           paymentMethod: 'crypto',
           paymentStatus: 'pending',
@@ -199,6 +231,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
 
         // 1. Create shipment record with pending payment status
         const savedShipmentId = await submitShipment(shipmentData);
+        shipmentIdRef.current = savedShipmentId;
 
         const description = `Shipment: ${shipmentData.deliveryCity}, ${shipmentData.deliveryCountry}`;
 
@@ -257,7 +290,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
   const effectiveGoldPrice = lockedGoldPriceRef.current ?? goldSpotPrice;
 
   const shipmentAssetValue = (shipmentWeight / 31.1035) * effectiveGoldPrice;
-  const calculatedShipmentFee = Math.ceil(shipmentAssetValue * 0.0025);
+  const calculatedShipmentFee = Math.ceil(shipmentAssetValue * SHIPMENT_FEE_RATE);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
@@ -478,7 +511,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
                         <span className="text-[#F5F5F5]">${Math.round(shipmentAssetValue * 100) / 100}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[#8A8A8E]">Shipment Fee (0.25%)</span>
+                        <span className="text-[#8A8A8E]">Shipment Fee ({SHIPMENT_FEE_RATE_LABEL})</span>
                         <span className="text-[#F5F5F5]">${calculatedShipmentFee.toFixed(2)}</span>
                       </div>
                     </div>
@@ -521,10 +554,12 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
           description={checkoutData.description}
           orderId={checkoutData.orderId}
           initialEmail={checkoutData.initialEmail}
-          onPaymentSuccess={() => {
+          onPaymentSuccess={(secondaryEmail?: string) => {
             onToast('Payment confirmed! Processing your shipment.', 'success');
+            notifyShipment(secondaryEmail);
             handleClose();
           }}
+          onPaymentConfirmed={notifyShipment}
         />
       )}
     </div>

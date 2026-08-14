@@ -12,7 +12,9 @@ interface CryptoCheckoutModalProps {
   description: string;
   orderId: string;
   initialEmail: string;
-  onPaymentSuccess: () => void;
+  onPaymentSuccess: (secondaryEmail?: string) => void;
+  /** Optional — fired on manual "I'VE PAID" confirmation without closing the modal. */
+  onPaymentConfirmed?: (secondaryEmail?: string) => void;
 }
 
 const CRYPTO_OPTIONS = [
@@ -30,6 +32,7 @@ export function CryptoCheckoutModal({
   orderId,
   initialEmail,
   onPaymentSuccess,
+  onPaymentConfirmed,
 }: CryptoCheckoutModalProps) {
   const [selectedCrypto, setSelectedCrypto] = useState('usdterc20');
   const [email] = useState(initialEmail);
@@ -159,7 +162,7 @@ export function CryptoCheckoutModal({
             if (status.payment_status === 'finished' || status.payment_status === 'sending') {
               clearInterval(interval);
               setTimeout(() => {
-                onPaymentSuccess();
+                onPaymentSuccess(secondaryEmail);
                 onClose();
               }, 2000);
             }
@@ -192,6 +195,9 @@ export function CryptoCheckoutModal({
       const status = await getPaymentStatus(paymentData.payment_id);
       if (status.payment_status === 'finished' || status.payment_status === 'sending' || status.payment_status === 'confirming') {
         setPaymentStatus('success');
+        // Manual confirmation is a legitimate payment success — notify the
+        // shipment owner without closing the modal (keeps the existing UX).
+        onPaymentConfirmed?.(secondaryEmail);
       } else {
         alert("Payment not detected yet. We are continuing to monitor the blockchain in the background.");
       }

@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
+import { getDatabase, type Database } from 'firebase-admin/database';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RTDB server-side reads via REST API (existing behavior — no service account
@@ -65,6 +66,37 @@ export async function readRTDB(path: string, idToken?: string): Promise<Record<s
   }
 }
 
+/**
+ * Write RTDB via REST API using an ID token for authentication.
+ *
+ * Mirrors the read strategy above (authenticated REST with the caller's
+ * Firebase ID token) so server routes can persist small markers — e.g.
+ * the shipment notification idempotency flag — on records the caller owns.
+ * Returns true when the server accepted the write.
+ */
+export async function writeRTDB(
+  path: string,
+  data: Record<string, unknown>,
+  idToken: string,
+  method: 'PUT' | 'PATCH' = 'PATCH'
+): Promise<boolean> {
+  try {
+    const url = `${RTDB_BASE}/${path}.json?auth=${encodeURIComponent(idToken)}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase Admin SDK — server-only authentication operations.
 //
@@ -79,7 +111,9 @@ export async function readRTDB(path: string, idToken?: string): Promise<Record<s
 //   FIREBASE_PRIVATE_KEY   (multiline PEM — keep the \n escapes)
 // ─────────────────────────────────────────────────────────────────────────────
 
+let cachedApp: App | null = null;
 let cachedAuth: Auth | null = null;
+let cachedDb: Database | null = null;
 
 function normalizePrivateKey(): string | null {
   const rawKey = process.env.FIREBASE_PRIVATE_KEY;
@@ -104,8 +138,14 @@ export function isAdminConfigured(): boolean {
   );
 }
 
-export function getAdminAuth(): Auth {
-  if (cachedAuth) return cachedAuth;
+/**
+ * The shared Firebase Admin app (service-account credentials + RTDB URL).
+ *
+ * Every Admin SDK service (auth, database) hangs off this one app so they
+ * share a single credential initialization.
+ */
+function getAdminApp(): App {
+  if (cachedApp) return cachedApp;
 
   const privateKey = normalizePrivateKey();
   if (!isAdminConfigured()) {
@@ -114,17 +154,55 @@ export function getAdminAuth(): Auth {
     );
   }
 
-  const app: App = getApps().length
-    ? getApps()[0]!
-    : initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID!.trim(),
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL!.trim(),
-          // The private key arrives with literal \n escapes — restore real newlines
-          privateKey: privateKey!,
-        }),
-      });
+  const config = {
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID!.trim(),
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL!.trim(),
+      // The private key arrives with literal \n escapes — restore real newlines
+      privateKey: privateKey!,
+    }),
+    // Needed by firebase-admin/database for server-side RTDB access
+    // (the service account bypasses the database rules entirely, so
+    // webhook/background writes work even on locked-down paths).
+    databaseURL: RTDB_BASE,
+  };
 
-  cachedAuth = getAuth(app);
+  const existing = getApps()[0];
+  if (existing?.options.databaseURL) {
+    // Reuse a fully-configured default app (e.g. from an earlier request in
+    // a long-running process).
+    cachedApp = existing;
+    return existing;
+  }
+
+  if (existing) {
+    // A default app was already initialized WITHOUT a database URL (e.g. by
+    // a route that only needed auth before this module gained RTDB access).
+    // App options are immutable, so create a dedicated named app with the
+    // URL instead of reusing the URL-less one.
+    cachedApp = initializeApp(config, 'apex-admin-rtdb');
+  } else {
+    cachedApp = initializeApp(config);
+  }
+  return cachedApp;
+}
+
+export function getAdminAuth(): Auth {
+  if (cachedAuth) return cachedAuth;
+  cachedAuth = getAuth(getAdminApp());
   return cachedAuth;
+}
+
+/**
+ * Server-side RTDB access via the Admin SDK (service-account credentials).
+ *
+ * Unlike readRTDB/writeRTDB (which act as a specific Firebase user), this
+ * talks to RTDB as the project's service account and is therefore NOT
+ * subject to the database rules — the right tool for webhook handlers and
+ * background jobs that must update records regardless of who called in.
+ */
+export function getAdminDb(): Database {
+  if (cachedDb) return cachedDb;
+  cachedDb = getDatabase(getAdminApp());
+  return cachedDb;
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { getAdminDb, isAdminConfigured } from '@/lib/firebase-admin';
 
 interface NOWPaymentsWebhookBody {
   payment_id?: string;
@@ -47,18 +48,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as NOWPaymentsWebhookBody;
     const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
-    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-    const dbUrl = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
 
     if (!ipnSecret) {
-      console.error('IPN_SECRET not configured');
+      console.error('[Webhook] IPN_SECRET not configured');
       return NextResponse.json({ success: false, message: 'Server not configured' }, { status: 500 });
     }
 
     // Verify webhook signature
     const signature = request.headers.get('x-nowpayments-sig');
     if (!signature) {
-      console.warn('Missing signature header');
+      console.warn('[Webhook] Missing signature header');
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -67,7 +66,7 @@ export async function POST(request: NextRequest) {
     const hash = crypto.createHmac('sha512', ipnSecret).update(bodyString).digest('hex');
 
     if (hash !== signature) {
-      console.warn('Invalid signature');
+      console.warn('[Webhook] Invalid signature');
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -77,45 +76,62 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Webhook] Payment ID: ${payment_id}, Status: ${payment_status}, Order: ${order_id}`);
 
-    // Use Firebase REST API for server-side database access (authenticated with API key)
-    try {
-      // Get all transactions to find matching payment_id
-      const transactionsUrl = `${dbUrl}/transactions.json?auth=${apiKey}`;
-      const transactionsResponse = await fetch(transactionsUrl);
-      const transactionsData = await transactionsResponse.json();
+    // ─────────────────────────────────────────────────────────────────────────
+    // Server-side RTDB access via the Firebase Admin SDK.
+    //
+    // Historical note: this used to call the RTDB REST API with the web API key
+    // (`?auth=<NEXT_PUBLIC_FIREBASE_API_KEY>`), which Firebase rejects with 401
+    // Permission denied — so every webhook-driven update silently no-opped in
+    // production. The Admin SDK authenticates as the project's service account
+    // (bypassing database rules), the same proven path the auth routes and the
+    // seed script use, so webhook updates actually land.
+    // ─────────────────────────────────────────────────────────────────────────
+    if (!isAdminConfigured()) {
+      console.warn('[Webhook] Firebase Admin SDK not configured — skipping RTDB updates');
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
 
+    try {
+      const db = getAdminDb();
+
+      // Find the transaction matching this payment.
       let foundTransaction: WebhookTransaction | null = null;
       let foundTransactionId: string | null = null;
 
-      if (transactionsData && typeof transactionsData === 'object') {
-        for (const key in transactionsData) {
-          const t = transactionsData[key] as WebhookTransaction;
-          if (t.paymentId === payment_id || (t.metadata && t.metadata.orderId === order_id)) {
-            foundTransaction = t;
-            foundTransactionId = key;
-            break;
+      if (payment_id || order_id) {
+        const snap = await db.ref('transactions').once('value');
+        const transactionsData = snap.val();
+        if (transactionsData && typeof transactionsData === 'object') {
+          for (const key in transactionsData) {
+            const t = transactionsData[key] as WebhookTransaction;
+            if (
+              (payment_id && t.paymentId === payment_id) ||
+              (order_id &&
+                (t.metadata?.orderId === order_id ||
+                  t.orderId === order_id ||
+                  t.shipmentId === order_id))
+            ) {
+              foundTransaction = t;
+              foundTransactionId = key;
+              break;
+            }
           }
         }
       }
 
-      // Update transaction status via REST API
+      // Update transaction status (PATCH semantics — only touch fields the
+      // webhook actually carries, so a missing pay_amount/pay_currency can't
+      // clobber values from a previous update).
       if (foundTransaction && foundTransactionId) {
-        const transactionUpdateUrl = `${dbUrl}/transactions/${foundTransactionId}.json?auth=${apiKey}`;
-        // Only overwrite fields the webhook actually carries, so a missing
-        // pay_amount/pay_currency can't clobber values from a previous update.
         const txPatch: Record<string, unknown> = {
           paymentStatus: normalizedStatus,
           updatedAt: new Date().toISOString(),
-          paymentId: payment_id,
         };
+        if (payment_id) txPatch.paymentId = payment_id;
         if (typeof pay_amount === 'number') txPatch.cryptoAmount = pay_amount;
         if (pay_currency) txPatch.cryptoCurrency = pay_currency.toUpperCase();
-        await fetch(transactionUpdateUrl, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(txPatch),
-        });
 
+        await db.ref(`transactions/${foundTransactionId}`).update(txPatch);
         console.log(`[Webhook] Updated transaction ${foundTransactionId} with status: ${payment_status}`);
       } else {
         console.warn(`[Webhook] Transaction not found for payment ID: ${payment_id}`);
@@ -127,59 +143,43 @@ export async function POST(request: NextRequest) {
 
         // Update associated order or shipment if exists
         if (foundTransaction?.type === 'gold_purchase' && foundTransaction?.orderId) {
-          const orderUrl = `${dbUrl}/orders/${foundTransaction.orderId}.json?auth=${apiKey}`;
-          await fetch(orderUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              paymentStatus: 'paid',
-              paidAt: new Date().toISOString(),
-            }),
+          await db.ref(`orders/${foundTransaction.orderId}`).update({
+            paymentStatus: 'paid',
+            paidAt: new Date().toISOString(),
           });
+          console.log(`[Webhook] Marked order ${foundTransaction.orderId} as paid`);
         } else if (foundTransaction?.type === 'shipment' && foundTransaction?.shipmentId) {
-          const shipmentUrl = `${dbUrl}/shipments/${foundTransaction.shipmentId}.json?auth=${apiKey}`;
-          await fetch(shipmentUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              paymentStatus: 'paid',
-              paidAt: new Date().toISOString(),
-            }),
+          await db.ref(`shipments/${foundTransaction.shipmentId}`).update({
+            paymentStatus: 'paid',
+            paidAt: new Date().toISOString(),
           });
+          console.log(`[Webhook] Marked shipment ${foundTransaction.shipmentId} as paid`);
         }
       } else if (normalizedStatus === 'failed' || normalizedStatus === 'expired') {
         console.log(`[Webhook] Payment failed/expired for order: ${order_id}`);
 
         // Mark order/shipment as failed if needed
-        if (foundTransaction?.orderId) {
-          const orderUrl = `${dbUrl}/orders/${foundTransaction.orderId}.json?auth=${apiKey}`;
-          await fetch(orderUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              paymentStatus: 'failed',
-            }),
+        if (foundTransaction?.type === 'gold_purchase' && foundTransaction?.orderId) {
+          await db.ref(`orders/${foundTransaction.orderId}`).update({
+            paymentStatus: 'failed',
           });
-        } else if (foundTransaction?.shipmentId) {
-          const shipmentUrl = `${dbUrl}/shipments/${foundTransaction.shipmentId}.json?auth=${apiKey}`;
-          await fetch(shipmentUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              paymentStatus: 'failed',
-            }),
+          console.log(`[Webhook] Marked order ${foundTransaction.orderId} as failed`);
+        } else if (foundTransaction?.type === 'shipment' && foundTransaction?.shipmentId) {
+          await db.ref(`shipments/${foundTransaction.shipmentId}`).update({
+            paymentStatus: 'failed',
           });
+          console.log(`[Webhook] Marked shipment ${foundTransaction.shipmentId} as failed`);
         }
       }
     } catch (dbError) {
-      console.error('Database error:', dbError);
+      console.error('[Webhook] Database error:', dbError);
       // Don't fail the webhook - acknowledge receipt to NOWPayments
     }
 
     // Always return 200 to acknowledge receipt
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('[Webhook] Webhook error:', error);
     return NextResponse.json({ success: false, error: String(error) }, { status: 400 });
   }
 }

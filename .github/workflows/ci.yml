@@ -22,6 +22,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Unit tests: webhook signature verification + shipment fee calculation
+      # (node:test with native TypeScript type-stripping — no extra deps).
+      - name: Test
+        run: npm test
+
       # Source-level guard: shared mineral status block + theme-specific
       # sky/blue/purple contrast values must exist in globals.css.
       - name: Check mineral status CSS (source)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { getAdminDb, isAdminConfigured } from '@/lib/firebase-admin';
+import { verifyWebhookSignature, normalizePaymentStatus } from '@/lib/nowpayments-signature';
 
 interface NOWPaymentsWebhookBody {
   payment_id?: string;
@@ -21,29 +21,6 @@ interface WebhookTransaction {
   };
 }
 
-/**
- * Map a NOWPayments webhook status to the app's transaction paymentStatus.
- *
- * Only FINAL success states ('finished'/'confirmed') count as confirmed.
- * 'confirming' and 'sending' are intermediate — the payment can still fail,
- * so they must not mark the order as paid (that would let fulfilment happen
- * before the funds actually arrive). A later 'failed' webhook would flip the
- * order back, but 'paidAt' would already be stamped and gold may have shipped.
- * 'refunded' is treated as failed so a chargeback flips the order back too.
- */
-function normalizePaymentStatus(status: string): string {
-  if (status === 'finished' || status === 'confirmed') {
-    return 'confirmed';
-  }
-  if (status === 'failed' || status === 'refunded') {
-    return 'failed';
-  }
-  if (status === 'expired') {
-    return 'expired';
-  }
-  return 'pending';
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as NOWPaymentsWebhookBody;
@@ -54,19 +31,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Server not configured' }, { status: 500 });
     }
 
-    // Verify webhook signature
-    const signature = request.headers.get('x-nowpayments-sig');
-    if (!signature) {
-      console.warn('[Webhook] Missing signature header');
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Reconstruct the body string for signature verification
-    const bodyString = JSON.stringify(body, Object.keys(body).sort());
-    const hash = crypto.createHmac('sha512', ipnSecret).update(bodyString).digest('hex');
-
-    if (hash !== signature) {
-      console.warn('[Webhook] Invalid signature');
+    // Verify webhook signature (HMAC-SHA512 over the sorted-key body JSON)
+    const signature = request.headers.get('x-nowpayments-sig') || '';
+    if (!verifyWebhookSignature(ipnSecret, body, signature)) {
+      console.warn('[Webhook] Missing or invalid signature');
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 

@@ -10,6 +10,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Relative imports with explicit .ts extensions are used by the pure
+    // lib modules so Node's native test runner (type stripping) can resolve
+    // them without a bundler. Bundler-style @/ alias imports remain valid.
+    "allowImportingTsExtensions": true,
     "noImplicitAny": false,
     "esModuleInterop": true,
     "module": "esnext",

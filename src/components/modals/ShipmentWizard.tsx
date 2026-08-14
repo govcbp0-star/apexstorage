@@ -4,7 +4,8 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { submitShipment } from '@/lib/shipments-service';
 import { submitTransaction } from '@/lib/transactions-service';
-import { SHIPMENT_FEE_RATE, SHIPMENT_FEE_RATE_LABEL } from '@/lib/constants';
+import { SHIPMENT_FEE_RATE_LABEL } from '@/lib/constants';
+import { calculateShipmentFee, goldAssetValueUsd } from '@/lib/shipment-fee';
 import { CryptoCheckoutModal } from './CryptoCheckoutModal';
 
 interface Asset {
@@ -196,9 +197,8 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
         const assetId = selectedGroup?.assets.map((a) => a.id).filter(Boolean).join(',') || form.assetId;
 
         // Calculate shipment fee: 0.15% of the asset's value based on locked gold price
-        // Formula: (weight_grams / 31.1035 oz_per_gram) * goldSpotPrice * 0.15%
-        const assetValueInUSD = (weight / 31.1035) * effectiveGoldPrice;
-        const shipmentFee = Math.ceil(assetValueInUSD * SHIPMENT_FEE_RATE); // 0.15% fee, rounded up to nearest whole number
+        const assetValueInUSD = goldAssetValueUsd(weight, effectiveGoldPrice);
+        const shipmentFee = calculateShipmentFee(weight, effectiveGoldPrice);
 
         const shipmentId = `${user?.uid || 'user'}_shipment_${Date.now()}`;
 
@@ -289,8 +289,8 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
   }
   const effectiveGoldPrice = lockedGoldPriceRef.current ?? goldSpotPrice;
 
-  const shipmentAssetValue = (shipmentWeight / 31.1035) * effectiveGoldPrice;
-  const calculatedShipmentFee = Math.ceil(shipmentAssetValue * SHIPMENT_FEE_RATE);
+  const shipmentAssetValue = goldAssetValueUsd(shipmentWeight, effectiveGoldPrice);
+  const calculatedShipmentFee = calculateShipmentFee(shipmentWeight, effectiveGoldPrice);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">

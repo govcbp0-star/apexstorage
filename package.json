@@ -14,6 +14,7 @@
     "build:standalone": "next build && node scripts/copy-standalone-assets.mjs",
     "start": "node .next/standalone/server.js",
     "lint": "eslint .",
+    "test": "node --test \"src/lib/*.test.ts\"",
     "check:jose": "node scripts/check-jose-cjs.mjs",
     "check:css": "node scripts/check-mineral-css.mjs",
     "postinstall": "node scripts/check-jose-cjs.mjs",

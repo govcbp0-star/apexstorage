@@ -68,8 +68,8 @@ export async function fetchAssets(): Promise<AssetRecord[]> {
   const assetsRef = ref(db, ASSETS_PATH);
   const snapshot = await get(assetsRef);
   if (!snapshot.exists()) return [];
-  const data = snapshot.val();
-  return Object.values(data) as AssetRecord[];
+  const data = snapshot.val() as Record<string, Omit<AssetRecord, 'id'> & Partial<Pick<AssetRecord, 'id'>>>;
+  return Object.entries(data).map(([id, asset]) => ({ ...asset, id }));
 }
 
 /** Subscribe to real-time assets updates */
@@ -80,8 +80,9 @@ export function subscribeToAssets(callback: (assets: AssetRecord[]) => void, onE
       callback([]);
       return;
     }
-    const data = snapshot.val();
-    const assets = Object.values(data) as AssetRecord[];
+    const data = snapshot.val() as Record<string, Omit<AssetRecord, 'id'> & Partial<Pick<AssetRecord, 'id'>>>;
+    // Use each RTDB record key as the canonical ID for legacy records without one.
+    const assets = Object.entries(data).map(([id, asset]) => ({ ...asset, id }));
     // Sort by creation date descending (newest first)
     assets.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     callback(assets);

@@ -295,10 +295,6 @@ export default function HomePage() {
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-28 w-full">
             <div className="grid lg:grid-cols-12 gap-12 items-center">
               <div className="lg:col-span-7 animate-[slideUp_0.6s_ease-out]">
-                <div className="flex items-center gap-3 mb-7">
-                  <span className="hallmark w-9 h-9 text-[9px] shrink-0">999.9</span>
-                  <span className="record-eyebrow">Allocated gold custody · records live</span>
-                </div>
                 <h1 className="display-head text-4xl sm:text-6xl lg:text-[4.1rem] leading-[1.02] mb-6">
                   Your gold, held<br />
                   <span className="gold-gradient-text">to the gram.</span>

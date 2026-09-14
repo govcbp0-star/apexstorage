@@ -43,7 +43,9 @@ export async function GET(req: NextRequest) {
       : [];
 
     const assets = assetsData
-      ? Object.values(assetsData).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      ? Object.entries(assetsData)
+          .map(([id, asset]: [string, any]) => ({ ...asset, id }))
+          .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       : [];
 
     const orders = ordersData

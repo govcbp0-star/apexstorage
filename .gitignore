@@ -1,14 +1,65 @@
-# Workspace-level artifacts — the application lives in apexstorage/
-# (its own .gitignore covers app-local files like .next/, .env*, node_modules/)
-node_modules/
-.freebuff/
-.next/
-.env*
-.DS_Store
-*.log
+# Root .gitignore — the Next.js application lives at the repository root.
+# Patterns are unanchored where artifacts can plausibly appear at any depth.
 
-# Secrets — never commit, wherever they land
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+coverage/
+
+# next.js
+.next/
+out/
+
+# netlify
+.netlify/
+netlify/functions/
+
+# production
+build/
+
+# misc
+.DS_Store
 *.pem
+*.lnk
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# Firebase service account credentials (NEVER commit)
 *-firebase-adminsdk-*.json
 firebase-service-account*.json
 service-account*.json
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+local-*
+.claude
+.z-ai-config
+*.log
+dev.log
+dev.out.log
+test
+prompt
+server.log
+
+# Skills / workspace metadata (local only)
+/skills/
+.freebuff/

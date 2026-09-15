@@ -29,7 +29,7 @@ async function requestPasswordReset(email: string): Promise<{ code?: string }> {
 }
 
 export default function LoginPage() {
-  const { login, googleSignIn, pending2FA, verify2FAPin, userProfile, logout, emailNotVerified, unverifiedEmail } = useAuth();
+  const { login, googleSignIn, pending2FA, verify2FAPin, userProfile, user, logout, emailNotVerified, unverifiedEmail } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +40,8 @@ export default function LoginPage() {
   // 2FA PIN state
   const [pinDigits, setPinDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [pinError, setPinError] = useState('');
+  const [pinResetMessage, setPinResetMessage] = useState('');
+  const [pinResetLoading, setPinResetLoading] = useState(false);
   const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
   const autoVerifyTriggered = useRef(false);
 
@@ -178,6 +180,34 @@ export default function LoginPage() {
     setLoginAttempted(false);
   };
 
+  /** Send a 2FA recovery link for the already authenticated pending-2FA user. */
+  const handleForgotTwoFAPin = async () => {
+    if (!user) {
+      setPinError('Your sign-in session has expired. Please sign in again.');
+      return;
+    }
+    setPinResetLoading(true);
+    setPinError('');
+    setPinResetMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/auth/request-2fa-pin-reset', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + idToken },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        setPinResetMessage('A secure reset link was sent to your registered email address.');
+      } else {
+        setPinError(data.message || 'We could not send a reset link. Please try again.');
+      }
+    } catch {
+      setPinError('We could not send a reset link. Please try again.');
+    } finally {
+      setPinResetLoading(false);
+    }
+  };
+
   /** Handle Forgot Password */
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,6 +272,9 @@ export default function LoginPage() {
             {pinError && (
               <div className="mb-4 p-2.5 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400 text-center">{pinError}</div>
             )}
+            {pinResetMessage && (
+              <div className="mb-4 p-2.5 bg-green-500/10 border border-green-500/20 rounded text-xs text-green-400 text-center">{pinResetMessage}</div>
+            )}
 
             {/* PIN Input Boxes */}
             <div className="flex justify-center gap-2 mb-5">
@@ -266,6 +299,13 @@ export default function LoginPage() {
             </button>
 
             <div className="mt-4 text-center">
+              <button
+                onClick={handleForgotTwoFAPin}
+                disabled={pinResetLoading}
+                className="block w-full mb-3 text-xs text-[#C9A84C] hover:text-[#D4B96A] disabled:opacity-50 transition-colors"
+              >
+                {pinResetLoading ? 'Sending reset link...' : 'Forgot 2FA PIN?'}
+              </button>
               <button
                 onClick={handleCancel2FA}
                 className="text-xs text-[#8A8A8E] hover:text-[#C9A84C] transition-colors"

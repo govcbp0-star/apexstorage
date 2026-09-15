@@ -4,6 +4,7 @@ import { getAdminAuth, isAdminConfigured } from '@/lib/firebase-admin';
 import { assertEmailConfig, getAppUrl, getResend, isPublicWebUrl, EMAIL_FROM, REPLY_TO, SUPPORT_EMAIL } from '@/lib/resend';
 import VerifyEmail from '@/lib/email/verify-email';
 import ResetPasswordEmail from '@/lib/email/reset-password';
+import ResetTwoFAPinEmail from '@/lib/email/reset-2fa-pin';
 import WelcomeEmail from '@/lib/email/welcome';
 
 /**
@@ -175,6 +176,27 @@ export async function sendPasswordResetEmailLink(email: string): Promise<AuthEma
     return result;
   } catch (err) {
     console.error('[AuthEmail] sendPasswordResetEmailLink failed:', err);
+    return mapError(err);
+  }
+}
+
+/** Deliver a branded, server-generated 2FA PIN recovery link. */
+export async function sendTwoFAPinResetEmail(
+  email: string,
+  resetUrl: string,
+): Promise<AuthEmailResult> {
+  const invalid = validateRequest(email);
+  if (invalid) return invalid;
+
+  try {
+    const html = await render(
+      React.createElement(ResetTwoFAPinEmail, { resetUrl, supportEmail: SUPPORT_EMAIL })
+    );
+    const result = await deliver(email, 'Reset Your APEXSTORAGE 2FA PIN', html);
+    if (result.success) result.message = '2FA PIN reset email sent successfully.';
+    return result;
+  } catch (err) {
+    console.error('[AuthEmail] sendTwoFAPinResetEmail failed:', err);
     return mapError(err);
   }
 }

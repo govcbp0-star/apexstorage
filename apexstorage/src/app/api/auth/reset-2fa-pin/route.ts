@@ -70,11 +70,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Re-check inside a transaction so concurrent requests cannot consume the
-    // same reset link. A failed update leaves the link consumed, which is
-    // safer than allowing a potentially replayable token.
+    // same reset link. firebase-admin runs the update function once against the
+    // LOCAL cache and hands it `null` when nothing is cached yet — returning
+    // undefined there aborts the transaction before the server is consulted.
+    // So prime that first run with the record just validated via .get(): the
+    // server compares it against the real value and re-runs this function with
+    // the actual record when they differ, keeping the replay protection.
     const tokenRef = database.ref(RESET_PATH + '/' + uid);
     const consumed = await tokenRef.transaction((current: TwoFAPinResetRecord | null) => {
-      if (!isUsableTwoFAPinReset(current, token)) return;
+      if (current === null) return { ...resetRecord, usedAt: Date.now() };
+      if (!isUsableTwoFAPinReset(current, token)) return undefined;
       return { ...current, usedAt: Date.now() };
     });
     if (!consumed.committed) return invalidLink();

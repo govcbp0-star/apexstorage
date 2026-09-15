@@ -342,6 +342,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUnverifiedEmail('');
         await fetchProfileRef.current(firebaseUser.uid, firebaseUser.email || undefined);
       } else {
+        // Never resurrect a cached role while the browser is on an auth page.
+        // After a genuine sign-out (e.g. a completed 2FA PIN reset signs the
+        // user out before redirecting to /auth/login), a cached authRole made
+        // the login page's redirect effect treat the phantom profile as an
+        // active session and bounce the user to the dashboard instead of
+        // showing the sign-in form. Clear the stale cache so the form shows.
+        if (typeof window !== 'undefined' && window.location.pathname.startsWith('/auth/')) {
+          localStorage.removeItem('authRole');
+          localStorage.removeItem('userName');
+        }
         const storedRole = localStorage.getItem('authRole') as 'client' | 'admin' | null;
         const storedName = localStorage.getItem('userName') || '';
         if (storedRole) {

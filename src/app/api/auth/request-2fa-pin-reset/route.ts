@@ -102,8 +102,11 @@ export async function POST(req: NextRequest) {
       if (cleanup.committed) {
         await database.ref(TOKEN_INDEX_PATH + '/' + record.tokenHash).remove();
       }
+      const failureMessage = result.code === 'not-configured'
+        ? '2FA PIN recovery email is not configured. Please contact support.'
+        : 'The recovery email could not be delivered. Verify the sender domain in Resend and try again.';
       return NextResponse.json(
-        { success: false, code: result.code || 'server-error', message: 'We could not send the recovery email. Please try again.' },
+        { success: false, code: result.code || 'server-error', message: failureMessage },
         { status: result.code === 'not-configured' ? 503 : 500 },
       );
     }

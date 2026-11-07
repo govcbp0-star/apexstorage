@@ -23,7 +23,8 @@ export default function ProfileSettings({ open, onClose, onToast }: ProfileSetti
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [currentPin, setCurrentPin] = useState(''); // for disabling 2FA
+  const [currentPin, setCurrentPin] = useState(''); // for changing or disabling 2FA
+  const [showChangePin, setShowChangePin] = useState(false);
   const [showDisablePin, setShowDisablePin] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingPhoto, setSavingPhoto] = useState(false);
@@ -42,6 +43,8 @@ export default function ProfileSettings({ open, onClose, onToast }: ProfileSetti
       setNewPin('');
       setConfirmPin('');
       setCurrentPin('');
+      setShowChangePin(false);
+      setShowDisablePin(false);
       setEditingName(false);
       setPhotoChanged(false);
     }
@@ -135,6 +138,41 @@ export default function ProfileSettings({ open, onClose, onToast }: ProfileSetti
     } catch (err) {
       console.error('[ProfileSettings] Enable 2FA failed:', err);
       onToast('Failed to enable 2FA', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Change the enabled 2FA PIN after verifying the current one. */
+  const handleChange2FAPin = async () => {
+    if (!currentPin) { onToast('Enter your current PIN', 'error'); return; }
+    if (!/^\d{4,6}$/.test(newPin)) { onToast('New PIN must contain 4-6 digits', 'error'); return; }
+    if (newPin !== confirmPin) { onToast('PINs do not match', 'error'); return; }
+    if (!user?.uid || !userProfile?.pin2FA) { onToast('Not authenticated', 'error'); return; }
+
+    setSaving(true);
+    try {
+      const currentHash = await hashPin(currentPin);
+      if (currentHash !== userProfile.pin2FA) {
+        onToast('Incorrect current PIN', 'error');
+        return;
+      }
+      const newHash = await hashPin(newPin);
+      if (newHash === userProfile.pin2FA) {
+        onToast('Choose a PIN that is different from your current PIN', 'error');
+        return;
+      }
+
+      await update(ref(db, `users/${user.uid}`), { pin2FA: newHash, twoFAEnabled: true });
+      await refreshProfile();
+      setShowChangePin(false);
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmPin('');
+      onToast('2FA PIN changed successfully', 'success');
+    } catch (err) {
+      console.error('[ProfileSettings] Change 2FA PIN failed:', err);
+      onToast('Failed to change 2FA PIN', 'error');
     } finally {
       setSaving(false);
     }
@@ -324,14 +362,78 @@ export default function ProfileSettings({ open, onClose, onToast }: ProfileSetti
                     <span className="text-xs text-green-500 font-bold tracking-wider">2FA ENABLED</span>
                   </div>
 
-                  {!showDisablePin ? (
-                    <button
-                      onClick={() => setShowDisablePin(true)}
-                      className="w-full px-3 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-xs font-bold tracking-wider hover:bg-red-500/20 transition-colors"
-                    >
-                      Disable 2FA
-                    </button>
-                  ) : (
+                  {!showDisablePin && !showChangePin && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setShowChangePin(true)}
+                        className="px-3 py-2.5 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-lg text-[#C9A84C] text-xs font-bold tracking-wider hover:bg-[#C9A84C]/20 transition-colors"
+                      >
+                        Change 2FA PIN
+                      </button>
+                      <button
+                        onClick={() => setShowDisablePin(true)}
+                        className="px-3 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-xs font-bold tracking-wider hover:bg-red-500/20 transition-colors"
+                      >
+                        Disable 2FA
+                      </button>
+                    </div>
+                  )}
+
+                  {showChangePin && (
+                    <div className="space-y-3 bg-[#1b212c] border border-[#212836] rounded-lg p-3">
+                      <p className="text-[10px] text-[#8A8A8E]">Enter your current PIN, then choose a new 4-6 digit PIN:</p>
+                      <div>
+                        <label className="block text-[9px] font-bold tracking-[0.15em] text-[#8A8A8E] uppercase mb-1">Current PIN</label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          autoComplete="current-password"
+                          maxLength={6}
+                          value={currentPin}
+                          onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setCurrentPin(v.slice(0, 6)); }}
+                          className="input-aurum tracking-[0.3em] text-center text-lg"
+                          placeholder="••••••"
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold tracking-[0.15em] text-[#8A8A8E] uppercase mb-1">New PIN</label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          autoComplete="new-password"
+                          maxLength={6}
+                          value={newPin}
+                          onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setNewPin(v.slice(0, 6)); }}
+                          className="input-aurum tracking-[0.3em] text-center text-lg"
+                          placeholder="••••••"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold tracking-[0.15em] text-[#8A8A8E] uppercase mb-1">Confirm New PIN</label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          autoComplete="new-password"
+                          maxLength={6}
+                          value={confirmPin}
+                          onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setConfirmPin(v.slice(0, 6)); }}
+                          className="input-aurum tracking-[0.3em] text-center text-lg"
+                          placeholder="••••••"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={handleChange2FAPin} disabled={saving} className="flex-1 btn-gold text-xs">
+                          {saving ? 'Changing...' : 'Change PIN'}
+                        </button>
+                        <button onClick={() => { setShowChangePin(false); setCurrentPin(''); setNewPin(''); setConfirmPin(''); }} className="flex-1 btn-gold-outline text-xs">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {showDisablePin && (
                     <div className="space-y-3 bg-[#1b212c] border border-[#212836] rounded-lg p-3">
                       <p className="text-[10px] text-[#8A8A8E]">Enter your current PIN to disable 2FA:</p>
                       <div>

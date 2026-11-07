@@ -18,11 +18,11 @@ const PerformanceChart = dynamic(() => import('@/components/modals/PerformanceCh
 import { ContactMessage, subscribeToMessages, markMessageRead, deleteMessage as deleteMessageRTDB } from '@/lib/messages';
 import { VaultRequest, subscribeToVaultRequests, updateVaultRequestStatus, deleteVaultRequest as deleteVaultRequestRTDB } from '@/lib/vault-requests';
 import { UserRecord, subscribeToUsers, updateUser as updateUserRTDB, deleteUser as deleteUserRTDB } from '@/lib/users-service';
-import { AssetRecord, subscribeToAssets, addAsset as addAssetRTDB, updateAsset as updateAssetRTDB, deleteAsset as deleteAssetRTDB } from '@/lib/assets-service';
-import { Order, subscribeToOrders, updateOrderStatus as updateOrderStatusRTDB, deleteOrder as deleteOrderRTDB } from '@/lib/orders-service';
-import { Shipment, subscribeToShipments, updateShipmentStatus as updateShipmentStatusRTDB, deleteShipment as deleteShipmentRTDB } from '@/lib/shipments-service';
+import { AssetRecord, addAsset as addAssetRTDB, updateAsset as updateAssetRTDB, deleteAsset as deleteAssetRTDB } from '@/lib/assets-service';
+import { Order, updateOrderStatus as updateOrderStatusRTDB, deleteOrder as deleteOrderRTDB } from '@/lib/orders-service';
+import { Shipment, updateShipmentStatus as updateShipmentStatusRTDB, deleteShipment as deleteShipmentRTDB } from '@/lib/shipments-service';
 import { NewsletterSubscriber, subscribeToNewsletterSubscribers } from '@/lib/newsletter';
-import { Transaction, getAllTransactions } from '@/lib/transactions-service';
+import { Transaction } from '@/lib/transactions-service';
 import TransactionHistory from '@/components/TransactionHistory';
 
 function Toast({ message, type, visible }: { message: string; type: string; visible: boolean }) {
@@ -364,7 +364,10 @@ export default function AdminDashboard() {
           // RTDB permission denied — fall back to server-side API
           console.warn('[Admin] RTDB users subscription failed, falling back to API:', error.code);
           try {
-            const res = await fetch('/api/admin/data');
+            const token = user ? await user.getIdToken() : '';
+            const res = await fetch('/api/admin/data', {
+              headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            });
             const data = await res.json();
             if (mounted && data.users) setUsers(data.users);
             if (mounted && data.vaultRequests) setVaultRequests(data.vaultRequests);
@@ -379,28 +382,7 @@ export default function AdminDashboard() {
 
     trySubscribe();
     return () => { mounted = false; if (unsubscribe) unsubscribe(); };
-  }, [authLoading, authRole]);
-
-  // Subscribe to assets from RTDB in real-time
-  useEffect(() => {
-    if (authLoading || authRole !== 'admin') return;
-    let mounted = true;
-    let unsubscribe: (() => void) | null = null;
-
-    const trySubscribe = () => {
-      unsubscribe = subscribeToAssets(
-        (rtbAssets) => {
-          if (mounted) setAssets(rtbAssets);
-        },
-        (error) => {
-          console.warn('[Admin] RTDB assets subscription failed:', error.code);
-        }
-      );
-    };
-
-    trySubscribe();
-    return () => { mounted = false; if (unsubscribe) unsubscribe(); };
-  }, [authLoading, authRole]);
+  }, [authLoading, authRole, user]);
 
   // Subscribe to contact messages from RTDB in real-time
   useEffect(() => {
@@ -420,44 +402,6 @@ export default function AdminDashboard() {
       if (mounted) setVaultRequests(rtbRequests);
     });
     return () => { mounted = false; unsubscribe(); };
-  }, [authLoading, authRole]);
-
-  // Subscribe to orders from RTDB in real-time
-  useEffect(() => {
-    if (authLoading || authRole !== 'admin') return;
-    let mounted = true;
-    const unsubscribe = subscribeToOrders((rtbOrders) => {
-      if (mounted) setOrders(rtbOrders);
-    });
-    return () => { mounted = false; unsubscribe(); };
-  }, [authLoading, authRole]);
-
-  // Subscribe to shipments from RTDB in real-time
-  useEffect(() => {
-    if (authLoading || authRole !== 'admin') return;
-    let mounted = true;
-    const unsubscribe = subscribeToShipments((rtbShipments) => {
-      if (mounted) setShipments(rtbShipments);
-    });
-    return () => { mounted = false; unsubscribe(); };
-  }, [authLoading, authRole]);
-
-  // Fetch all transactions
-  useEffect(() => {
-    if (authLoading || authRole !== 'admin') return;
-    let mounted = true;
-    const fetchTransactions = async () => {
-      try {
-        const allTxns = await getAllTransactions();
-        if (mounted) setTransactions(allTxns);
-      } catch (error) {
-        console.warn('[Admin] Failed to fetch transactions:', error);
-      }
-    };
-    fetchTransactions();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchTransactions, 30000);
-    return () => { mounted = false; clearInterval(interval); };
   }, [authLoading, authRole]);
 
   // Subscribe to newsletter subscribers from RTDB in real-time
@@ -499,7 +443,7 @@ export default function AdminDashboard() {
   }, [authLoading, authRole]);
 
   // Also load data from server-side API as a reliable fallback
-  // The server-side API bypasses RTDB security rules since it uses the Firebase SDK directly
+  // The server-side API bypasses RTDB rules after verifying the admin token.
   useEffect(() => {
     if (authLoading || authRole !== 'admin') return;
     let mounted = true;
@@ -520,10 +464,11 @@ export default function AdminDashboard() {
           if (Array.isArray(data.vaultRequests)) setVaultRequests(data.vaultRequests);
           if (Array.isArray(data.orders)) setOrders(data.orders);
           if (Array.isArray(data.shipments)) setShipments(data.shipments);
+          if (Array.isArray(data.transactions)) setTransactions(data.transactions);
           if (Array.isArray(data.newsletterSubscribers)) setNewsletterSubs(data.newsletterSubscribers);
         }
       } catch {
-        // Silent fail — RTDB subscriptions are the secondary source
+        // The next authenticated poll will retry.
       }
     };
     // Initial fetch after short delay
@@ -654,9 +599,20 @@ export default function AdminDashboard() {
     try {
       if (editMode && editId) {
         await updateAssetRTDB(editId, { ref: assetForm.ref, type: assetForm.type, weight: parseFloat(assetForm.weight), status: assetForm.status, vaultLocation: assetForm.vaultLocation, owner: ownerName, userId: assetForm.userId });
+        setAssets((current) => current.map((asset) => asset.id === editId ? {
+          ...asset,
+          ref: assetForm.ref,
+          type: assetForm.type,
+          weight: parseFloat(assetForm.weight),
+          status: assetForm.status,
+          vaultLocation: assetForm.vaultLocation,
+          owner: ownerName,
+          userId: assetForm.userId,
+        } : asset));
         showToast('Asset updated', 'success');
       } else {
-        await addAssetRTDB({ ref: assetForm.ref, type: assetForm.type, weight: parseFloat(assetForm.weight), status: assetForm.status, vaultLocation: assetForm.vaultLocation, owner: ownerName, userId: assetForm.userId });
+        const id = await addAssetRTDB({ ref: assetForm.ref, type: assetForm.type, weight: parseFloat(assetForm.weight), status: assetForm.status, vaultLocation: assetForm.vaultLocation, owner: ownerName, userId: assetForm.userId });
+        setAssets((current) => [{ id, ref: assetForm.ref, type: assetForm.type, weight: parseFloat(assetForm.weight), status: assetForm.status, vaultLocation: assetForm.vaultLocation, owner: ownerName, userId: assetForm.userId, createdAt: new Date().toISOString() }, ...current]);
         showToast('Asset created', 'success');
       }
     } catch {
@@ -668,6 +624,7 @@ export default function AdminDashboard() {
   const deleteAsset = async (id: string) => {
     try {
       await deleteAssetRTDB(id);
+      setAssets((current) => current.filter((asset) => asset.id !== id));
       showToast('Asset deleted', 'info');
     } catch {
       showToast('Failed to delete asset', 'error');
@@ -687,7 +644,7 @@ export default function AdminDashboard() {
       //    `assets` collection, so without this step the approved vault
       //    never appears in the client's portfolio.
       const refCode = `VLT-${request.location.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`;
-      await addAssetRTDB({
+      const assetId = await addAssetRTDB({
         ref: refCode,
         type: 'bar',
         weight: Number(request.quantity) || 0,
@@ -696,6 +653,17 @@ export default function AdminDashboard() {
         owner: request.userName,
         userId: request.userId,
       });
+      setAssets((current) => [...current, {
+        id: assetId,
+        ref: refCode,
+        type: 'bar',
+        weight: Number(request.quantity) || 0,
+        status: 'active',
+        vaultLocation: request.location,
+        owner: request.userName,
+        userId: request.userId,
+        createdAt: new Date().toISOString(),
+      }]);
 
       showToast('Vault approved & asset allocated to client', 'success');
     } catch {
@@ -752,16 +720,17 @@ export default function AdminDashboard() {
   const updateOrderStatus = async (id: string, status: string) => {
     try {
       await updateOrderStatusRTDB(id, status);
+      setOrders((current) => current.map((order) => order.id === id ? { ...order, status } : order));
       showToast('Order status updated', 'success');
     } catch {
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-      showToast('Order status updated (local)', 'success');
+      showToast('Failed to update order status', 'error');
     }
   };
 
   const deleteOrder = async (id: string) => {
     try {
       await deleteOrderRTDB(id);
+      setOrders((current) => current.filter((order) => order.id !== id));
       showToast('Order deleted', 'info');
     } catch {
       showToast('Failed to delete order', 'error');
@@ -770,33 +739,31 @@ export default function AdminDashboard() {
 
   const approveShipment = async (id: string) => {
     try {
-      // Find the shipment to get assetId
-      const shipment = shipments.find(s => s.id === id);
       await updateShipmentStatusRTDB(id, 'approved');
-      // Update asset status to "in-transit" when shipment is approved
-      if (shipment?.assetId) {
-        await updateAssetRTDB(shipment.assetId, { status: 'in-transit' });
-      }
+      setShipments((current) => current.map((shipment) => shipment.id === id ? { ...shipment, status: 'approved' } : shipment));
+      setAssets((current) => current.map((asset) =>
+        shipments.find((shipment) => shipment.id === id)?.assetId.split(',').includes(asset.id)
+          ? { ...asset, status: 'in-transit' }
+          : asset
+      ));
       showToast('Shipment approved and asset marked in-transit', 'success');
-    } catch (err) {
-      setShipments(prev => prev.map(s => s.id === id ? { ...s, status: 'approved' } : s));
-      showToast('Shipment approved (local)', 'success');
+    } catch {
+      showToast('Failed to approve shipment', 'error');
     }
   };
 
   const rejectShipment = async (id: string) => {
     try {
-      // Find the shipment to get assetId
-      const shipment = shipments.find(s => s.id === id);
       await updateShipmentStatusRTDB(id, 'rejected');
-      // Revert asset status back to active if shipment is rejected
-      if (shipment?.assetId) {
-        await updateAssetRTDB(shipment.assetId, { status: 'active' });
-      }
+      setShipments((current) => current.map((shipment) => shipment.id === id ? { ...shipment, status: 'rejected' } : shipment));
+      setAssets((current) => current.map((asset) =>
+        shipments.find((shipment) => shipment.id === id)?.assetId.split(',').includes(asset.id)
+          ? { ...asset, status: 'active' }
+          : asset
+      ));
       showToast('Shipment rejected and asset status reverted', 'info');
-    } catch (err) {
-      setShipments(prev => prev.map(s => s.id === id ? { ...s, status: 'rejected' } : s));
-      showToast('Shipment rejected (local)', 'info');
+    } catch {
+      showToast('Failed to reject shipment', 'error');
     }
   };
 
@@ -1912,12 +1879,11 @@ export default function AdminDashboard() {
                                 <button onClick={async () => { 
                                   try { 
                                     await updateShipmentStatusRTDB(s.id, 'shipped');
-                                    // Also update the asset status to shipped
-                                    await updateAssetRTDB(s.assetId, { status: 'shipped' });
+                                    setShipments((current) => current.map((shipment) => shipment.id === s.id ? { ...shipment, status: 'shipped' } : shipment));
+                                    setAssets((current) => current.map((asset) => s.assetId.split(',').includes(asset.id) ? { ...asset, status: 'shipped' } : asset));
                                     showToast('Shipment marked as shipped and asset updated', 'success'); 
-                                  } catch (err) { 
-                                    setShipments(prev => prev.map(ps => ps.id === s.id ? { ...ps, status: 'shipped' } : ps));
-                                    showToast('Shipment marked as shipped (local)', 'success'); 
+                                  } catch {
+                                    showToast('Failed to mark shipment as shipped', 'error');
                                   } 
                                 }} className="px-2 py-0.5 bg-[#C9A84C]/10 text-[#C9A84C] rounded text-[9px] font-bold tracking-wider hover:bg-[#C9A84C]/20">Mark Shipped</button>
                               </div>

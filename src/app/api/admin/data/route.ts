@@ -1,86 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readRTDB } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { assetIntegrityFields, verifyRecordIntegrity } from '@/lib/record-integrity';
+import { RequestAuthError, verifyAdminRequest } from '@/lib/server-auth';
 
-export async function GET(req: NextRequest) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
   try {
-    const authHeader = req.headers.get('authorization') || '';
-    const idToken = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : undefined;
+    await verifyAdminRequest(request);
+    const database = getAdminDb();
+    const paths = ['users', 'vaultRequests', 'contactMessages', 'assets', 'orders', 'shipments', 'newsletter', 'transactions'];
+    const snapshots = await Promise.all(paths.map((path) => database.ref(path).once('value')));
+    const records = Object.fromEntries(paths.map((path, index) => [path, snapshots[index].val() || {}]));
 
-    // Fetch all data in parallel
-    const [usersData, vaultData, msgData, assetsData, ordersData, shipmentsData, newsletterData] = await Promise.all([
-      readRTDB('users', idToken),
-      readRTDB('vaultRequests', idToken),
-      readRTDB('contactMessages', idToken),
-      readRTDB('assets', idToken),
-      readRTDB('orders', idToken),
-      readRTDB('shipments', idToken),
-      readRTDB('newsletter', idToken),
-    ]);
+    const users = Object.entries(records.users as Record<string, Record<string, unknown>>)
+      .map(([id, profile]) => ({
+        id,
+        name: profile.name || '',
+        email: profile.email || '',
+        role: profile.role || 'client',
+        status: profile.status || 'active',
+        vaultLocation: profile.vaultLocation || '',
+        joined: profile.createdAt ? new Date(String(profile.createdAt)).toISOString().split('T')[0] : '',
+        createdAt: profile.createdAt || '',
+      }))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
-    const users = usersData
-      ? Object.entries(usersData).map(([uid, profile]: [string, any]) => ({
-          id: uid,
-          name: profile.name || '',
-          email: profile.email || '',
-          role: profile.role || 'client',
-          status: profile.status || 'active',
-          vaultLocation: profile.vaultLocation || '',
-          joined: profile.createdAt ? new Date(profile.createdAt).toISOString().split('T')[0] : '',
-          createdAt: profile.createdAt || '',
-        })).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      : [];
+    const sortedValues = (data: unknown) => Object.values(data as Record<string, Record<string, unknown>>)
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    const withIds = (data: unknown): Record<string, unknown>[] => Object.entries(data as Record<string, Record<string, unknown>>)
+      .map<Record<string, unknown>>(([id, value]) => ({ ...value, id: typeof value.id === 'string' ? value.id : id }))
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 
-    const vaultRequests = vaultData
-      ? Object.values(vaultData).sort((a: any, b: any) => {
-          const dateCompare = (b.date || '').localeCompare(a.date || '');
-          if (dateCompare !== 0) return dateCompare;
-          return (b.createdAt || '').localeCompare(a.createdAt || '');
-        })
-      : [];
+    const newsletterSubscribers = Object.entries(records.newsletter as Record<string, Record<string, unknown>>)
+      .map(([id, subscriber]) => ({
+        id,
+        email: subscriber.email || '',
+        subscribedAt: subscriber.subscribedAt || '',
+        source: subscriber.source || 'website-footer',
+      }))
+      .filter((subscriber) => subscriber.email)
+      .sort((a, b) => String(b.subscribedAt).localeCompare(String(a.subscribedAt)));
 
-    const messages = msgData
-      ? Object.values(msgData).sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''))
-      : [];
-
-    const assets = assetsData
-      ? Object.entries(assetsData)
-          .map(([id, asset]: [string, any]) => ({ ...asset, id }))
-          .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      : [];
-
-    const orders = ordersData
-      ? Object.values(ordersData).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      : [];
-
-    const shipments = shipmentsData
-      ? Object.values(shipmentsData).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      : [];
-
-    const newsletterSubscribers = newsletterData
-      ? Object.entries(newsletterData)
-          .map(([id, subscriber]: [string, any]) => ({
-            id,
-            email: subscriber.email || '',
-            subscribedAt: subscriber.subscribedAt || '',
-            source: subscriber.source || 'website-footer',
-          }))
-          .filter((subscriber) => subscriber.email)
-          .sort((a, b) => (b.subscribedAt || '').localeCompare(a.subscribedAt || ''))
-      : [];
+    const assets = withIds(records.assets).map((asset) => ({
+      ...asset,
+      integrityVerified: asset.recordVersion === 1 &&
+        verifyRecordIntegrity('asset', assetIntegrityFields(asset), asset.recordIntegrity),
+    }));
 
     return NextResponse.json({
       users,
-      vaultRequests,
-      messages,
+      vaultRequests: sortedValues(records.vaultRequests),
+      messages: sortedValues(records.contactMessages),
       assets,
-      orders,
-      shipments,
+      orders: withIds(records.orders),
+      shipments: withIds(records.shipments),
       newsletterSubscribers,
-    });
-  } catch (err: any) {
-    return NextResponse.json({
-      error: err.message || 'Unknown error',
-      code: err.code || 'unknown',
-    }, { status: 500 });
+      transactions: withIds(records.transactions),
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    if (error instanceof RequestAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('[API /admin/data] Failed to load admin data:', error);
+    return NextResponse.json({ error: 'Could not load dashboard data.' }, { status: 500 });
   }
 }

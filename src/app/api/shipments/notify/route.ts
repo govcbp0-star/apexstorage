@@ -3,7 +3,7 @@ import { sendShipmentNotification } from '@/lib/shipment-email-service';
 
 /**
  * POST /api/shipments/notify
- * Body: { shipmentId: string, secondaryEmail?: string }
+ * Body: { shipmentId: string }
  * Headers: Authorization: Bearer <Firebase ID token of the shipment owner>
  *
  * Sends the branded shipment notification email (primary + secondary when
@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const shipmentId = typeof body?.shipmentId === 'string' ? body.shipmentId.trim() : '';
-    const secondaryEmail = typeof body?.secondaryEmail === 'string' ? body.secondaryEmail.trim() : '';
 
     const authHeader = req.headers.get('authorization') || '';
     const idToken = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await sendShipmentNotification(shipmentId, { idToken, secondaryEmail });
+    const result = await sendShipmentNotification(shipmentId, { idToken });
 
     if (result.success) {
       return NextResponse.json(result, { status: 200 });
@@ -38,6 +37,7 @@ export async function POST(req: NextRequest) {
       result.code === 'invalid-request' ? 400
       : result.code === 'not-found' ? 404
       : result.code === 'not-authorized' ? 403
+      : result.code === 'payment-pending' ? 409
       : result.code === 'already-sent' ? 200
       : result.code === 'no-recipients' ? 422
       : result.code === 'not-configured' ? 503

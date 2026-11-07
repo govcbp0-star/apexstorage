@@ -158,20 +158,20 @@ SUPPORT_EMAIL=...
 
 ### Apply Realtime Database rules
 
-The repository ships a recommended ruleset in `rtdb-rules.json`. Paste it into **Firebase Console → Realtime Database → Rules** and publish. The rules cover:
+The repository ships a ruleset in `rtdb-rules.json`. Publish it in **Firebase Console → Realtime Database → Rules** after the updated server routes are deployed. Users read only their own assets, orders, shipments, and transactions; browser writes to these paths are denied. The server creates signed order/shipment records and performs admin mutations through the Firebase Admin SDK. Admin API requests require a verified ID token whose email appears in `ADMIN_EMAILS` or the existing `NEXT_PUBLIC_ADMIN_EMAILS` allowlist.
 
-| Path             | Read             | Write                                |
-| ---------------- | ---------------- | ------------------------------------ |
-| `users`          | any auth user    | owner only (`$uid === auth.uid`)     |
-| `vaultRequests`  | any auth user    | any auth user                        |
-| `contactMessages`| public           | any auth user (open for contact form)|
-| `assets`         | any auth user    | any auth user                        |
-| `orders`         | any auth user    | any auth user                        |
-| `shipments`      | any auth user    | any auth user                        |
-| `newsletter`     | any auth user    | open (for unauthenticated visitors)  |
-| `transactions`   | any auth user    | owner or admin                       |
+| Path              | Read                | Write                         |
+| ----------------- | ------------------- | ----------------------------- |
+| `users`           | any auth user       | owner only                    |
+| `vaultRequests`   | any auth user       | any auth user                 |
+| `contactMessages` | public              | open for the contact form     |
+| `assets`          | record owner        | server only                   |
+| `orders`          | record owner        | server only                   |
+| `shipments`       | record owner        | server only                   |
+| `newsletter`      | any auth user       | open for visitors             |
+| `transactions`    | record owner        | server only                   |
 
-Tighten these rules for production.
+Legacy order and shipment records have no server integrity signature; create a new one before checkout. Legacy asset records must be reviewed by an admin and opened/saved in the Assets screen to sign them before they can be used for a shipment.
 
 ### Run
 
@@ -229,7 +229,8 @@ The project is pre-wired for Netlify — see `netlify.toml`, `.nvmrc`, and the `
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Public (browser) |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Public (browser) |
 | `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | Public (browser) |
-| `NEXT_PUBLIC_ADMIN_EMAILS` | Public (browser) |
+| `NEXT_PUBLIC_ADMIN_EMAILS` | Public allowlist; server checks the signed-in email against it |
+| `ADMIN_EMAILS` | Optional server-only admin allowlist; takes precedence over `NEXT_PUBLIC_ADMIN_EMAILS` |
 | `NOWPAYMENTS_API_KEY` | Server only |
 | `NOWPAYMENTS_IPN_SECRET` | Server only |
 | `FIREBASE_PROJECT_ID` | Server only |
@@ -247,7 +248,7 @@ The project is pre-wired for Netlify — see `netlify.toml`, `.nvmrc`, and the `
 
 **Webhooks**
 
-Point NOWPayments IPN callbacks at `https://<your-site>.netlify.app/api/payments/nowpayments-webhook`. The handler verifies the `x-nowpayments-sig` HMAC-SHA512 header against `NOWPAYMENTS_IPN_SECRET` and updates RTDB via the REST API.
+Point NOWPayments IPN callbacks at `https://<your-site>/api/payments/nowpayments-webhook`. The handler verifies the `x-nowpayments-sig` HMAC-SHA512 header against `NOWPAYMENTS_IPN_SECRET` and updates RTDB with the Firebase Admin SDK.
 
 **Local Netlify preview**
 

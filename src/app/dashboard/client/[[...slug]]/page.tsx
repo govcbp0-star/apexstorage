@@ -10,11 +10,11 @@ import BuyGoldModal from '@/components/modals/BuyGoldModal';
 import ShipmentWizard from '@/components/modals/ShipmentWizard';
 import ProfileSettings from '@/components/modals/ProfileSettings';
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal';
-import { AssetRecord, subscribeToAssets } from '@/lib/assets-service';
-import { Order, subscribeToOrders } from '@/lib/orders-service';
-import { Shipment, subscribeToShipments } from '@/lib/shipments-service';
+import { AssetRecord } from '@/lib/assets-service';
+import { Order } from '@/lib/orders-service';
+import { Shipment } from '@/lib/shipments-service';
 import { VaultRequest, subscribeToVaultRequests } from '@/lib/vault-requests';
-import { Transaction, subscribeToTransactions } from '@/lib/transactions-service';
+import { Transaction } from '@/lib/transactions-service';
 import TransactionHistory from '@/components/TransactionHistory';
 import { formatNumber } from '@/lib/gold-price';
 import { cn } from '@/lib/utils';
@@ -445,47 +445,8 @@ export default function ClientDashboard() {
   }, [authRole, authLoading, pending2FA, router]);
 
   // ── Data loading strategy ──
-  // Primary: API route (uses Admin SDK to bypass RTDB security rules)
-  // Secondary: RTDB real-time subscriptions (only work if client has auth context)
-
-  useEffect(() => {
-    if (!user?.uid || authLoading) return;
-    let mounted = true;
-    const unsubscribe = subscribeToAssets((allAssets) => {
-      if (!mounted) return;
-      const filtered = allAssets.filter(a => a.userId === user.uid || a.owner === user.email);
-      setAssets(filtered);
-    }, (error) => {
-      console.warn('[Client] RTDB assets subscription error:', error.code);
-    });
-    return () => { mounted = false; unsubscribe(); };
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    if (!user?.uid || authLoading) return;
-    let mounted = true;
-    const unsubscribe = subscribeToOrders((allOrders) => {
-      if (!mounted) return;
-      const filtered = allOrders.filter(o => o.userId === user.uid || o.userEmail === user.email);
-      setOrders(filtered);
-    }, (error) => {
-      console.warn('[Client] RTDB orders subscription error:', error.code);
-    });
-    return () => { mounted = false; unsubscribe(); };
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    if (!user?.uid || authLoading) return;
-    let mounted = true;
-    const unsubscribe = subscribeToShipments((allShipments) => {
-      if (!mounted) return;
-      const filtered = allShipments.filter(s => s.userId === user.uid || s.userEmail === user.email);
-      setShipments(filtered);
-    }, (error) => {
-      console.warn('[Client] RTDB shipments subscription error:', error.code);
-    });
-    return () => { mounted = false; unsubscribe(); };
-  }, [user, authLoading]);
+  // Orders, shipments and transactions are loaded from an authenticated API;
+  // browser reads are intentionally blocked by the database rules.
 
   useEffect(() => {
     if (!user?.uid || authLoading) return;
@@ -501,22 +462,12 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (!user?.uid || authLoading) return;
     let mounted = true;
-    const unsubscribe = subscribeToTransactions(
-      user.uid,
-      (txns) => { if (mounted) setTransactions(txns); },
-      (error) => { console.warn('[Client] RTDB transactions subscription error:', error.code); },
-    );
-    return () => { mounted = false; unsubscribe(); };
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    if (!user?.uid || authLoading) return;
-    let mounted = true;
     const fetchData = async () => {
       try {
         const token = await user.getIdToken().catch(() => '');
-        const params = new URLSearchParams({ userId: user.uid, userEmail: user.email || '', token });
-        const res = await fetch(`/api/client/data?${params}`);
+        const res = await fetch('/api/client/data', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) return;
         const data = await res.json();
         if (data.error) return;
@@ -525,8 +476,9 @@ export default function ClientDashboard() {
           setOrders(data.orders || []);
           setShipments(data.shipments || []);
           setMyVaultRequests(data.vaultRequests || []);
+          setTransactions(data.transactions || []);
         }
-      } catch { /* Silent — RTDB subscriptions provide real-time updates */ }
+      } catch { /* The next authenticated poll will retry. */ }
     };
     fetchData();
     const interval = setInterval(fetchData, 10000);

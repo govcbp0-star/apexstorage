@@ -2,8 +2,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { submitShipment } from '@/lib/shipments-service';
-import { submitTransaction } from '@/lib/transactions-service';
 import { SHIPMENT_FEE_RATE_LABEL } from '@/lib/constants';
 import { calculateShipmentFee, goldAssetValueUsd } from '@/lib/shipment-fee';
 import { CryptoCheckoutModal } from './CryptoCheckoutModal';
@@ -15,6 +13,7 @@ interface Asset {
   weight: number;
   status: string;
   vaultLocation?: string;
+  integrityVerified?: boolean;
 }
 
 interface ShipmentWizardProps {
@@ -49,7 +48,7 @@ function locKey(loc: string): string {
 }
 
 export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpotPrice }: ShipmentWizardProps) {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -81,7 +80,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
   // Send the branded shipment notification (primary + secondary email) once
   // the payment for this shipment is confirmed. Best-effort and idempotent
   // server-side — a failure here must never block the confirmed flow.
-  const notifyShipment = (secondaryEmail?: string) => {
+  const notifyShipment = () => {
     const createdShipmentId = shipmentIdRef.current;
     if (!createdShipmentId || !user) return;
     user
@@ -93,7 +92,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
             'Content-Type': 'application/json',
             Authorization: `Bearer ${idToken}`,
           },
-          body: JSON.stringify({ shipmentId: createdShipmentId, secondaryEmail: secondaryEmail || '' }),
+          body: JSON.stringify({ shipmentId: createdShipmentId }),
         })
       )
       .catch((err) => console.error('[ShipmentWizard] Shipment notification failed:', err));
@@ -105,7 +104,13 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
   };
 
   // Active assets (always use full list so filtering works)
-  const activeAssets = useMemo(() => assets.filter((a) => a.status === 'active'), [assets]);
+  const activeAssets = useMemo(
+    () => assets.filter((asset) => asset.status === 'active' && asset.integrityVerified !== false),
+    [assets]
+  );
+  const hasUnverifiedAssets = assets.some((asset) =>
+    asset.type === form.assetType && asset.status === 'active' && asset.integrityVerified === false
+  );
 
   // Always show all asset types — if user has no assets of a type, the second dropdown will explain
   const availableTypes = ASSET_TYPES;
@@ -187,84 +192,47 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
       // Prepare shipment for payment
       setLoading(true);
       try {
-        const totalWeight = selectedGroup?.totalWeight || 0;
-        const weight = form.shippingAmount === 'ship_full'
-          ? totalWeight
-          : (parseFloat(form.partialGrams) || 0);
-
-        // Combined ref of all assets at the selected vault location
-        const assetRef = selectedGroup?.assets.map((a) => a.ref).filter(Boolean).join(', ') || selectedGroup?.label || '';
-        const assetId = selectedGroup?.assets.map((a) => a.id).filter(Boolean).join(',') || form.assetId;
-
-        // Calculate shipment fee: 0.15% of the asset's value based on locked gold price
-        const assetValueInUSD = goldAssetValueUsd(weight, effectiveGoldPrice);
-        const shipmentFee = calculateShipmentFee(weight, effectiveGoldPrice);
-
-        const shipmentId = `${user?.uid || 'user'}_shipment_${Date.now()}`;
-
-        const shipmentData = {
-          userName: userProfile?.name || user?.displayName || user?.email?.split('@')[0] || 'Unknown',
-          userId: user?.uid || '',
-          userEmail: user?.email || '',
-          assetRef,
-          assetId,
-          shippingAmount: form.shippingAmount,
-          partialGrams: form.shippingAmount === 'ship_partial' ? parseFloat(form.partialGrams) || 0 : 0,
-          deliveryName: form.deliveryName,
-          deliveryPhone: form.deliveryPhone,
-          deliveryAddress: form.deliveryAddress,
-          deliveryCity: form.deliveryCity,
-          deliveryPostcode: form.deliveryPostcode,
-          deliveryCountry: form.deliveryCountry,
-          weight,
-          shipmentFee,
-          // Persist the values used to compute the fee so the shipment
-          // notification email can render the exact locked price / value
-          // from the record itself instead of recalculating.
-          vaultLocation: selectedGroup?.label || '',
-          goldPrice: effectiveGoldPrice,
-          goldValue: Math.round(assetValueInUSD * 100) / 100,
-          shipmentId,
-          paymentMethod: 'crypto',
-          paymentStatus: 'pending',
-        };
-
-        // 1. Create shipment record with pending payment status
-        const savedShipmentId = await submitShipment(shipmentData);
-        shipmentIdRef.current = savedShipmentId;
-
-        const description = `Shipment: ${shipmentData.deliveryCity}, ${shipmentData.deliveryCountry}`;
-
-        // 2. Create transaction record mapped to order
-        const transactionId = await submitTransaction({
-          userId: user?.uid || '',
-          userEmail: user?.email || '',
-          userName: shipmentData.userName,
-          type: 'shipment',
-          description,
-          amount: shipmentFee || 50,
-          currency: 'usd',
-          cryptoCurrency: '',
-          cryptoAmount: 0,
-          paymentId: '',
-          paymentStatus: 'pending',
-          shipmentId: savedShipmentId,
-          metadata: {
-            orderId: savedShipmentId,
+        if (!user) throw new Error('Please sign in again before creating a shipment.');
+        const idToken = await user.getIdToken();
+        const response = await fetch('/api/shipments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
           },
+          body: JSON.stringify({
+            assetType: form.assetType,
+            vaultKey: selectedGroup?.key,
+            shippingAmount: form.shippingAmount,
+            partialGrams: form.shippingAmount === 'ship_partial' ? parseFloat(form.partialGrams) || 0 : 0,
+            deliveryName: form.deliveryName,
+            deliveryPhone: form.deliveryPhone,
+            deliveryAddress: form.deliveryAddress,
+            deliveryCity: form.deliveryCity,
+            deliveryPostcode: form.deliveryPostcode,
+            deliveryCountry: form.deliveryCountry,
+          }),
         });
+        const result = await response.json().catch(() => ({})) as {
+          message?: string;
+          shipmentId?: string;
+          transactionId?: string;
+          amount?: number;
+        };
+        if (!response.ok || !result.shipmentId || !result.transactionId || typeof result.amount !== 'number') {
+          throw new Error(result.message || 'Could not create the shipment. Please try again.');
+        }
+        shipmentIdRef.current = result.shipmentId;
 
-        // 3. Open Custom Checkout
         setCheckoutData({
-          amount: shipmentFee || 50,
-          description,
-          orderId: savedShipmentId,
-          transactionId,
+          amount: result.amount,
+          orderId: result.shipmentId,
+          transactionId: result.transactionId,
           initialEmail: user?.email || '',
         });
         setShowCheckout(true);
       } catch (err: any) {
-        onToast('Failed to create shipment. Please try again.', 'error');
+        onToast(err?.message || 'Failed to create shipment. Please try again.', 'error');
         console.error('Shipment creation error:', err);
       } finally {
         setLoading(false);
@@ -392,8 +360,12 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
                         </select>
                       ) : (
                         <div className="p-3 border border-[#212836] rounded bg-[#1b212c]">
-                          <p className="text-[10px] text-[#8A8A8E]">No active assets of this type found.</p>
-                          <p className="text-[9px] text-[#C9A84C] mt-1">Purchase gold first, or wait for admin to approve your order.</p>
+                          <p className="text-[10px] text-[#8A8A8E]">No verified active assets of this type found.</p>
+                          <p className="text-[9px] text-[#C9A84C] mt-1">
+                            {hasUnverifiedAssets
+                              ? 'Ask an admin to verify the owner, weight, and vault location by opening and saving the existing asset.'
+                              : 'Purchase gold first, or wait for admin to approve your order.'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -555,9 +527,9 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
           orderId={checkoutData.orderId}
           transactionId={checkoutData.transactionId}
           initialEmail={checkoutData.initialEmail}
-          onPaymentSuccess={(secondaryEmail?: string) => {
+          onPaymentSuccess={() => {
             onToast('Payment confirmed! Processing your shipment.', 'success');
-            notifyShipment(secondaryEmail);
+            notifyShipment();
             handleClose();
           }}
           onPaymentConfirmed={notifyShipment}

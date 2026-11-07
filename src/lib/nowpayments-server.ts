@@ -2,6 +2,12 @@ import 'server-only';
 
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import {
+  goldOrderIntegrityFields,
+  shipmentIntegrityFields,
+  verifyRecordIntegrity,
+} from '@/lib/record-integrity';
+import { normalizePaymentStatus } from '@/lib/nowpayments-signature';
 
 const API_BASE = 'https://api.nowpayments.io/v1';
 const SUPPORTED_CURRENCIES = new Set(['usdterc20', 'btc', 'eth', 'usdc']);
@@ -23,9 +29,23 @@ interface PaymentTransaction {
   paymentId?: string;
   cryptoCurrency?: string;
   paymentStatus?: string;
+  amount?: number;
   orderId?: string;
   shipmentId?: string;
   metadata?: Record<string, unknown>;
+}
+
+interface SignedPaymentLink {
+  orderId: string;
+  amount: number;
+}
+
+interface SignedPaymentRecord extends Record<string, unknown> {
+  id?: string;
+  userId?: string;
+  transactionId?: string;
+  recordVersion?: number;
+  recordIntegrity?: string;
 }
 
 interface ProviderPayment {
@@ -189,19 +209,39 @@ export async function createPaymentForTransaction(input: {
   let description: string;
   if (transaction.type === 'gold_purchase' && orderId.startsWith(`${uid}_order_`)) {
     const orderSnapshot = await database.ref(`orders/${orderId}`).once('value');
-    const order = orderSnapshot.val() as Record<string, unknown> | null;
+    const order = orderSnapshot.val() as SignedPaymentRecord | null;
     if (!order || order.userId !== uid || order.paymentMethod !== 'crypto' ||
         !['pending', 'failed', 'expired'].includes(String(order.paymentStatus || '').toLowerCase())) {
       throw new PaymentRouteError('This gold order is not available for payment.', 409);
+    }
+    if (
+      order.recordVersion !== 1 ||
+      order.transactionId !== transactionId ||
+      !verifyRecordIntegrity('gold-order', goldOrderIntegrityFields(order), order.recordIntegrity)
+    ) {
+      throw new PaymentRouteError(
+        'This order was created before secure checkout was enabled. Please create a new order.',
+        409
+      );
     }
     amount = Number(order.estimatedTotal);
     description = `Buy ${String(order.productType || 'gold')} - ${Number(order.quantityGrams) || 0}g`;
   } else if (transaction.type === 'shipment' && orderId.startsWith(`${uid}_shipment_`)) {
     const shipmentSnapshot = await database.ref(`shipments/${orderId}`).once('value');
-    const shipment = shipmentSnapshot.val() as Record<string, unknown> | null;
+    const shipment = shipmentSnapshot.val() as SignedPaymentRecord | null;
     if (!shipment || shipment.userId !== uid || shipment.paymentMethod !== 'crypto' ||
         !['pending', 'failed', 'expired'].includes(String(shipment.paymentStatus || '').toLowerCase())) {
       throw new PaymentRouteError('This shipment is not available for payment.', 409);
+    }
+    if (
+      shipment.recordVersion !== 1 ||
+      shipment.transactionId !== transactionId ||
+      !verifyRecordIntegrity('shipment', shipmentIntegrityFields(shipment), shipment.recordIntegrity)
+    ) {
+      throw new PaymentRouteError(
+        'This shipment was created before secure checkout was enabled. Please create a new shipment.',
+        409
+      );
     }
     amount = Number(shipment.shipmentFee) || 50;
     description = `Shipment: ${String(shipment.deliveryCity || '')}, ${String(shipment.deliveryCountry || '')}`;
@@ -212,6 +252,9 @@ export async function createPaymentForTransaction(input: {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new PaymentRouteError('The saved order has an invalid payment amount.', 409);
   }
+  if (!Number.isFinite(Number(transaction.amount)) || Number(transaction.amount) !== amount) {
+    throw new PaymentRouteError('The saved transaction does not match the signed order amount.', 409);
+  }
 
   if (transaction.paymentId) {
     const existingPayment = await callProvider<ProviderPayment>(
@@ -219,6 +262,7 @@ export async function createPaymentForTransaction(input: {
     );
     const existingStatus = String(existingPayment.payment_status || '').toLowerCase();
     if (!['failed', 'expired', 'refunded'].includes(existingStatus)) {
+      assertProviderPaymentMatchesOrder(existingPayment, orderId, amount);
       // Reuse the active payment after a retry/reopen; never create a second
       // payable address for the same transaction.
       return toPublicPayment(existingPayment, orderId, amount, transaction.paymentId);
@@ -238,6 +282,7 @@ export async function createPaymentForTransaction(input: {
     }),
   });
 
+  assertProviderPaymentMatchesOrder(payment, orderId, amount);
   const publicPayment = toPublicPayment(payment, orderId, amount);
 
   await transactionRef.update({
@@ -271,11 +316,94 @@ export async function getPaymentStatusForTransaction(input: {
   if (!transaction || transaction.userId !== uid || transaction.paymentId !== paymentId) {
     throw new PaymentRouteError('You cannot check this payment.', 404);
   }
+  const signedLink = await assertSignedLinkedRecord(uid, transactionId, transaction);
 
   const payment = await callProvider<ProviderPayment>(`/payment/${encodeURIComponent(paymentId)}`);
-  if (typeof payment.payment_status !== 'string') {
-    throw new PaymentRouteError('NOWPayments returned an invalid payment status.', 502);
+  assertProviderPaymentMatchesOrder(payment, signedLink.orderId, signedLink.amount);
+  if (typeof payment.payment_status !== 'string') throw new PaymentRouteError('NOWPayments returned an invalid payment status.', 502);
+
+  const normalizedStatus = normalizePaymentStatus(payment.payment_status);
+  if (normalizedStatus !== 'pending') {
+    const database = getAdminDb();
+    const now = new Date().toISOString();
+    const transactionPatch: Record<string, unknown> = {
+      paymentStatus: normalizedStatus,
+      updatedAt: now,
+    };
+    const resourcePaymentStatus = normalizedStatus === 'confirmed' ? 'paid' : normalizedStatus;
+    if (normalizedStatus === 'confirmed') transactionPatch.paidAt = now;
+    await database.ref(`transactions/${transactionId}`).update(transactionPatch);
+    const resourceId = transaction.type === 'gold_purchase' ? transaction.orderId : transaction.shipmentId;
+    const resourcePath = transaction.type === 'gold_purchase' ? 'orders' : 'shipments';
+    if (resourceId) {
+      await database.ref(`${resourcePath}/${resourceId}`).update({
+        paymentStatus: resourcePaymentStatus,
+        ...(normalizedStatus === 'confirmed' ? { paidAt: now } : {}),
+      });
+    }
   }
 
   return { payment_status: payment.payment_status };
+}
+
+async function assertSignedLinkedRecord(
+  uid: string,
+  transactionId: string,
+  transaction: PaymentTransaction
+): Promise<SignedPaymentLink> {
+  const database = getAdminDb();
+  if (transaction.type === 'gold_purchase' && transaction.orderId?.startsWith(`${uid}_order_`)) {
+    const snapshot = await database.ref(`orders/${transaction.orderId}`).once('value');
+    const order = snapshot.val() as SignedPaymentRecord | null;
+    if (
+      order?.userId === uid &&
+      order.id === transaction.orderId &&
+      order.transactionId === transactionId &&
+      order.recordVersion === 1 &&
+      verifyRecordIntegrity('gold-order', goldOrderIntegrityFields(order), order.recordIntegrity)
+    ) {
+      const amount = Number(order.estimatedTotal);
+      if (Number.isFinite(amount) && amount > 0 && amountsMatch(transaction.amount, amount)) {
+        return { orderId: transaction.orderId, amount };
+      }
+    }
+  }
+
+  if (transaction.type === 'shipment' && transaction.shipmentId?.startsWith(`${uid}_shipment_`)) {
+    const snapshot = await database.ref(`shipments/${transaction.shipmentId}`).once('value');
+    const shipment = snapshot.val() as SignedPaymentRecord | null;
+    if (
+      shipment?.userId === uid &&
+      shipment.id === transaction.shipmentId &&
+      shipment.transactionId === transactionId &&
+      shipment.recordVersion === 1 &&
+      verifyRecordIntegrity('shipment', shipmentIntegrityFields(shipment), shipment.recordIntegrity)
+    ) {
+      const amount = Number(shipment.shipmentFee);
+      if (Number.isFinite(amount) && amount > 0 && amountsMatch(transaction.amount, amount)) {
+        return { orderId: transaction.shipmentId, amount };
+      }
+    }
+  }
+
+  throw new PaymentRouteError(
+    'This payment record predates secure checkout or no longer matches its transaction.',
+    409
+  );
+}
+
+function amountsMatch(value: unknown, expected: number): boolean {
+  const amount = Number(value);
+  return Number.isFinite(amount) && Math.round(amount * 100) === Math.round(expected * 100);
+}
+
+function assertProviderPaymentMatchesOrder(payment: ProviderPayment, orderId: string, amount: number): void {
+  if (
+    typeof payment.price_amount !== 'number' ||
+    Math.round(payment.price_amount * 100) !== Math.round(amount * 100) ||
+    String(payment.price_currency || '').toLowerCase() !== 'usd' ||
+    payment.order_id !== orderId
+  ) {
+    throw new PaymentRouteError('The NOWPayments invoice does not match this order amount.', 409);
+  }
 }

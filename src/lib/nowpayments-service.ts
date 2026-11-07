@@ -57,3 +57,14 @@ export function getPaymentStatus(
     transactionId,
   });
 }
+
+/** Save a user-selected secondary notification email on the owned transaction. */
+export function savePaymentNotificationEmail(
+  transactionId: string,
+  secondaryEmail: string
+): Promise<{ success: boolean }> {
+  return postAuthenticated<{ success: boolean }>('/api/payments/notification-email', {
+    transactionId,
+    secondaryEmail,
+  });
+}

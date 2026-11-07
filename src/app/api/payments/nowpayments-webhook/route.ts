@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb, isAdminConfigured } from '@/lib/firebase-admin';
 import { verifyWebhookSignature, normalizePaymentStatus } from '@/lib/nowpayments-signature';
+import {
+  goldOrderIntegrityFields,
+  shipmentIntegrityFields,
+  verifyRecordIntegrity,
+} from '@/lib/record-integrity';
 
 interface NOWPaymentsWebhookBody {
   payment_id?: string;
@@ -8,13 +13,17 @@ interface NOWPaymentsWebhookBody {
   order_id?: string;
   pay_amount?: number;
   pay_currency?: string;
+  price_amount?: number;
+  price_currency?: string;
 }
 
 interface WebhookTransaction {
+  userId?: string;
   paymentId?: string;
   type?: 'gold_purchase' | 'shipment';
   orderId?: string;
   shipmentId?: string;
+  amount?: number;
   metadata?: {
     orderId?: string;
     [key: string]: unknown;
@@ -39,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Payment status mapping
-    const { payment_id, payment_status, order_id, pay_amount, pay_currency } = body;
+    const { payment_id, payment_status, order_id, pay_amount, pay_currency, price_amount, price_currency } = body;
     const normalizedStatus = normalizePaymentStatus(payment_status || '');
 
     console.log(`[Webhook] Payment ID: ${payment_id}, Status: ${payment_status}, Order: ${order_id}`);
@@ -92,6 +101,20 @@ export async function POST(request: NextRequest) {
       // webhook actually carries, so a missing pay_amount/pay_currency can't
       // clobber values from a previous update).
       if (foundTransaction && foundTransactionId) {
+        const signedLink = await verifyLinkedPaymentRecord(db, foundTransactionId, foundTransaction);
+        const amountMatches = signedLink && Number.isFinite(foundTransaction.amount) &&
+          Math.round(Number(foundTransaction.amount) * 100) === Math.round(signedLink.amount * 100);
+        const callbackMatchesOrder = Boolean(order_id && signedLink?.orderId === order_id);
+        const callbackMatchesAmount = normalizedStatus !== 'confirmed' || (
+          typeof price_amount === 'number' &&
+          Math.round(price_amount * 100) === Math.round((signedLink?.amount || 0) * 100) &&
+          String(price_currency || '').toLowerCase() === 'usd'
+        );
+        if (!signedLink || !amountMatches || !callbackMatchesOrder || !callbackMatchesAmount) {
+          console.warn('[Webhook] Ignoring a payment update that does not match its signed order amount and ID.');
+          return NextResponse.json({ success: true }, { status: 200 });
+        }
+
         const txPatch: Record<string, unknown> = {
           paymentStatus: normalizedStatus,
           updatedAt: new Date().toISOString(),
@@ -151,4 +174,44 @@ export async function POST(request: NextRequest) {
     console.error('[Webhook] Webhook error:', error);
     return NextResponse.json({ success: false, error: String(error) }, { status: 400 });
   }
+}
+
+async function verifyLinkedPaymentRecord(
+  database: ReturnType<typeof getAdminDb>,
+  transactionId: string,
+  transaction: WebhookTransaction
+): Promise<{ orderId: string; amount: number } | null> {
+  if (transaction.type === 'gold_purchase' && transaction.orderId) {
+    const snapshot = await database.ref(`orders/${transaction.orderId}`).once('value');
+    const order = snapshot.val() as Record<string, unknown> | null;
+    if (
+      order &&
+      order.userId === transaction.userId &&
+      order.id === transaction.orderId &&
+      order.transactionId === transactionId &&
+      order.recordVersion === 1 &&
+      verifyRecordIntegrity('gold-order', goldOrderIntegrityFields(order), order.recordIntegrity)
+    ) {
+      const amount = Number(order.estimatedTotal);
+      return Number.isFinite(amount) && amount > 0 ? { orderId: transaction.orderId, amount } : null;
+    }
+  }
+
+  if (transaction.type === 'shipment' && transaction.shipmentId) {
+    const snapshot = await database.ref(`shipments/${transaction.shipmentId}`).once('value');
+    const shipment = snapshot.val() as Record<string, unknown> | null;
+    if (
+      shipment &&
+      shipment.userId === transaction.userId &&
+      shipment.id === transaction.shipmentId &&
+      shipment.transactionId === transactionId &&
+      shipment.recordVersion === 1 &&
+      verifyRecordIntegrity('shipment', shipmentIntegrityFields(shipment), shipment.recordIntegrity)
+    ) {
+      const amount = Number(shipment.shipmentFee);
+      return Number.isFinite(amount) && amount > 0 ? { orderId: transaction.shipmentId, amount } : null;
+    }
+  }
+
+  return null;
 }

@@ -2,8 +2,6 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { submitOrder } from '@/lib/orders-service';
-import { submitTransaction } from '@/lib/transactions-service';
 import { CryptoCheckoutModal } from './CryptoCheckoutModal';
 
 interface BuyGoldModalProps {
@@ -14,7 +12,7 @@ interface BuyGoldModalProps {
 }
 
 export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: BuyGoldModalProps) {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [productType, setProductType] = useState('');
   const [quantityGrams, setQuantityGrams] = useState('');
   const [quantityOz, setQuantityOz] = useState('');
@@ -60,60 +58,40 @@ export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: 
 
     setLoading(true);
     try {
-      const orderData = {
-        userName: userProfile?.name || user?.displayName || user?.email?.split('@')[0] || 'Unknown',
-        userId: user?.uid || '',
-        userEmail: user?.email || '',
-        type: 'Buy Gold',
-        productType,
-        quantityGrams: hasG ? g : parseFloat((oz * 31.1035).toFixed(2)),
-        quantityOz: hasOz ? oz : parseFloat((g / 31.1035).toFixed(4)),
-        vault,
-        estimatedTotal: Math.round(estimatedTotal * 100) / 100,
-      };
-      
-      const orderId = `${user?.uid || 'user'}_order_${Date.now()}`;
-      
-      // 1. Create order record with pending payment status
-      const savedOrderId = await submitOrder({
-        ...orderData,
-        orderId,
-        paymentMethod: 'crypto',
-        paymentStatus: 'pending',
-      });
-
-      const description = `Buy ${productType} - ${orderData.quantityGrams}g`;
-
-      // 2. Create transaction record mapped to order
-      const transactionId = await submitTransaction({
-        userId: user?.uid || '',
-        userEmail: user?.email || '',
-        userName: orderData.userName,
-        type: 'gold_purchase',
-        description,
-        amount: orderData.estimatedTotal,
-        currency: 'usd',
-        cryptoCurrency: '',
-        cryptoAmount: 0,
-        paymentId: '',
-        paymentStatus: 'pending',
-        orderId: savedOrderId,
-        metadata: {
-          orderId: savedOrderId,
+      if (!user) throw new Error('Please sign in again before creating an order.');
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
         },
+        body: JSON.stringify({
+          productType,
+          vault,
+          quantityOz: hasOz ? oz : g / 31.1035,
+        }),
       });
+      const result = await response.json().catch(() => ({})) as {
+        message?: string;
+        orderId?: string;
+        transactionId?: string;
+        amount?: number;
+        quantityGrams?: number;
+      };
+      if (!response.ok || !result.orderId || !result.transactionId || typeof result.amount !== 'number') {
+        throw new Error(result.message || 'Could not create the order. Please try again.');
+      }
 
-      // 3. Open Custom Checkout
       setCheckoutData({
-        amount: orderData.estimatedTotal,
-        description,
-        orderId: savedOrderId,
-        transactionId,
+        amount: result.amount,
+        orderId: result.orderId,
+        transactionId: result.transactionId,
         initialEmail: user?.email || '',
       });
       setShowCheckout(true);
     } catch (err: any) {
-      onToast('Failed to create order. Please try again.', 'error');
+      onToast(err?.message || 'Failed to create order. Please try again.', 'error');
       console.error('Order creation error:', err);
     } finally {
       setLoading(false);

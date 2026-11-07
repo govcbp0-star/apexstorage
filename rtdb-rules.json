@@ -21,24 +21,21 @@
       }
     },
     "assets": {
-      ".read": "auth != null",
-      ".write": "auth != null",
       "$assetId": {
-        ".write": "auth != null"
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
+        ".write": false
       }
     },
     "orders": {
-      ".read": "auth != null",
-      ".write": "auth != null",
       "$orderId": {
-        ".write": "auth != null"
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
+        ".write": false
       }
     },
     "shipments": {
-      ".read": "auth != null",
-      ".write": "auth != null",
       "$shipmentId": {
-        ".write": "auth != null"
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
+        ".write": false
       }
     },
     "newsletter": {
@@ -49,11 +46,9 @@
       }
     },
     "transactions": {
-      ".read": "auth != null",
-      ".write": "auth != null",
       "$transactionId": {
-        ".read": "data.child('userId').val() === auth.uid || root.child('admins').child(auth.uid).exists()",
-        ".write": "auth != null"
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
+        ".write": false
       }
     }
   }

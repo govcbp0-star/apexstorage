@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, CheckCircle2, Loader2, Info, Timer } from 'lucide-react';
 import QRCode from 'react-qr-code';
-import { createPayment, getPaymentStatus, NOWPaymentResponse } from '@/lib/nowpayments-service';
-import { ref, get, update, query, orderByChild, equalTo } from 'firebase/database';
-import { db } from '@/lib/firebase';
+import {
+  createPayment,
+  getPaymentStatus,
+  NOWPaymentResponse,
+  savePaymentNotificationEmail,
+} from '@/lib/nowpayments-service';
 
 interface CryptoCheckoutModalProps {
   isOpen: boolean;
@@ -57,40 +60,7 @@ export function CryptoCheckoutModal({
   // Sync emails to Firebase
   const saveEmailsToFirebase = async (secEmail: string) => {
     try {
-      const txRef = ref(db, 'transactions');
-      const q = query(txRef, orderByChild('orderId'), equalTo(orderId));
-      const snapshot = await get(q);
-      
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const txKey = Object.keys(data)[0];
-        await update(ref(db, `transactions/${txKey}`), {
-          userEmail: email,
-          secondaryEmail: secEmail,
-          metadata: {
-            ...data[txKey].metadata,
-            secondaryEmail: secEmail
-          }
-        });
-      } else {
-        const allSnapshot = await get(txRef);
-        if (allSnapshot.exists()) {
-          const allData = allSnapshot.val();
-          for (const key in allData) {
-            if (allData[key].metadata?.orderId === orderId) {
-              await update(ref(db, `transactions/${key}`), {
-                userEmail: email,
-                secondaryEmail: secEmail,
-                metadata: {
-                  ...allData[key].metadata,
-                  secondaryEmail: secEmail
-                }
-              });
-              break;
-            }
-          }
-        }
-      }
+      await savePaymentNotificationEmail(transactionId, secEmail);
     } catch (err) {
       console.error("Failed to save emails to Firebase:", err);
     }
@@ -157,15 +127,13 @@ export function CryptoCheckoutModal({
       interval = setInterval(async () => {
         try {
           const status = await getPaymentStatus(paymentData.payment_id, transactionId);
-          if (status.payment_status === 'finished' || status.payment_status === 'sending' || status.payment_status === 'confirming') {
+          if (status.payment_status === 'finished') {
             setPaymentStatus('success');
-            if (status.payment_status === 'finished' || status.payment_status === 'sending') {
-              clearInterval(interval);
-              setTimeout(() => {
-                onPaymentSuccess(secondaryEmail);
-                onClose();
-              }, 2000);
-            }
+            clearInterval(interval);
+            setTimeout(() => {
+              onPaymentSuccess(secondaryEmail);
+              onClose();
+            }, 2000);
           } else if (status.payment_status === 'expired' || status.payment_status === 'failed') {
             setPaymentStatus(status.payment_status);
             setPaymentData(null);
@@ -194,11 +162,12 @@ export function CryptoCheckoutModal({
         await saveEmailsToFirebase(secondaryEmail);
       }
       const status = await getPaymentStatus(paymentData.payment_id, transactionId);
-      if (status.payment_status === 'finished' || status.payment_status === 'sending' || status.payment_status === 'confirming') {
+      if (status.payment_status === 'finished') {
         setPaymentStatus('success');
-        // Manual confirmation is a legitimate payment success — notify the
-        // shipment owner without closing the modal (keeps the existing UX).
+        // Notify the shipment owner without closing the modal (keeps the existing UX).
         onPaymentConfirmed?.(secondaryEmail);
+      } else if (status.payment_status === 'sending' || status.payment_status === 'confirming') {
+        alert('Your payment is still being confirmed. We will keep checking automatically.');
       } else if (status.payment_status === 'expired' || status.payment_status === 'failed') {
         setPaymentStatus(status.payment_status);
         setPaymentData(null);

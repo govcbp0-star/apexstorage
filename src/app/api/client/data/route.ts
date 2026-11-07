@@ -1,55 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readRTDB } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { assetIntegrityFields, verifyRecordIntegrity } from '@/lib/record-integrity';
+import { RequestAuthError, verifyRequestUser } from '@/lib/server-auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const userEmail = searchParams.get('userEmail');
-    const idToken = searchParams.get('token') || undefined;
+    const decoded = await verifyRequestUser(request);
+    const database = getAdminDb();
+    const paths = ['assets', 'orders', 'shipments', 'vaultRequests', 'transactions'];
+    const snapshots = await Promise.all(paths.map((path) => database.ref(path).once('value')));
+    const data = Object.fromEntries(paths.map((path, index) => [path, snapshots[index].val() || {}]));
+    const email = decoded.email?.toLowerCase() || '';
 
-    if (!userId && !userEmail) {
-      return NextResponse.json({ error: 'userId or userEmail required' }, { status: 400 });
-    }
+    const belongsToUser = (record: Record<string, unknown>) =>
+      record.userId === decoded.uid ||
+      (email && typeof record.userEmail === 'string' && record.userEmail.toLowerCase() === email) ||
+      (email && typeof record.owner === 'string' && record.owner.toLowerCase() === email);
+    const filterRecords = (records: unknown, strictUid = false): Record<string, unknown>[] =>
+      Object.entries(records as Record<string, Record<string, unknown>>)
+        .filter(([, record]) => strictUid ? record.userId === decoded.uid : belongsToUser(record))
+        .map<Record<string, unknown>>(([id, record]) => ({ ...record, id: typeof record.id === 'string' ? record.id : id }))
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 
-    // Helper: match if record belongs to this user
-    const belongsToUser = (record: any) =>
-      record.userId === userId || record.userEmail === userEmail ||
-      record.owner === userEmail;
+    const assets = filterRecords(data.assets, true).map((asset) => ({
+      ...asset,
+      integrityVerified: asset.recordVersion === 1 &&
+        verifyRecordIntegrity('asset', assetIntegrityFields(asset), asset.recordIntegrity),
+    }));
 
-    // Fetch all data in parallel for speed
-    const [assetsData, ordersData, shipmentsData, vaultData] = await Promise.all([
-      readRTDB('assets', idToken),
-      readRTDB('orders', idToken),
-      readRTDB('shipments', idToken),
-      readRTDB('vaultRequests', idToken),
-    ]);
-
-    const assets = assetsData
-      ? Object.values(assetsData).filter(belongsToUser).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      : [];
-
-    const orders = ordersData
-      ? Object.values(ordersData).filter(belongsToUser).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      : [];
-
-    const shipments = shipmentsData
-      ? Object.values(shipmentsData).filter(belongsToUser).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      : [];
-
-    const vaultRequests = vaultData
-      ? Object.values(vaultData).filter(belongsToUser).sort((a: any, b: any) => {
-          const dateCompare = (b.date || '').localeCompare(a.date || '');
-          if (dateCompare !== 0) return dateCompare;
-          return (b.createdAt || '').localeCompare(a.createdAt || '');
-        })
-      : [];
-
-    return NextResponse.json({ assets, orders, shipments, vaultRequests });
-  } catch (err: any) {
     return NextResponse.json({
-      error: err.message || 'Unknown error',
-      code: err.code || 'unknown',
-    }, { status: 500 });
+      assets,
+      orders: filterRecords(data.orders, true),
+      shipments: filterRecords(data.shipments, true),
+      vaultRequests: filterRecords(data.vaultRequests),
+      transactions: filterRecords(data.transactions, true),
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    if (error instanceof RequestAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('[API /client/data] Failed to load client data:', error);
+    return NextResponse.json({ error: 'Could not load dashboard data.' }, { status: 500 });
   }
 }

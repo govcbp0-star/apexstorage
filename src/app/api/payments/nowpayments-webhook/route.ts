@@ -72,13 +72,14 @@ export async function POST(request: NextRequest) {
         if (transactionsData && typeof transactionsData === 'object') {
           for (const key in transactionsData) {
             const t = transactionsData[key] as WebhookTransaction;
-            if (
-              (payment_id && t.paymentId === payment_id) ||
-              (order_id &&
-                (t.metadata?.orderId === order_id ||
-                  t.orderId === order_id ||
-                  t.shipmentId === order_id))
-            ) {
+            const matchesPayment = Boolean(payment_id && t.paymentId === payment_id);
+            const matchesOrder = Boolean(
+              order_id &&
+              (t.metadata?.orderId === order_id || t.orderId === order_id || t.shipmentId === order_id)
+            );
+            const isCurrentPayment = !payment_id || !t.paymentId || t.paymentId === payment_id;
+
+            if (matchesPayment || (matchesOrder && isCurrentPayment)) {
               foundTransaction = t;
               foundTransactionId = key;
               break;

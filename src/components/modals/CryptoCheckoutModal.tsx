@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Copy, CheckCircle2, Loader2, Info, Timer } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { createPayment, getPaymentStatus, NOWPaymentResponse } from '@/lib/nowpayments-service';
@@ -9,8 +9,8 @@ interface CryptoCheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   amount: number;
-  description: string;
   orderId: string;
+  transactionId: string;
   initialEmail: string;
   onPaymentSuccess: (secondaryEmail?: string) => void;
   /** Optional — fired on manual "I'VE PAID" confirmation without closing the modal. */
@@ -28,8 +28,8 @@ export function CryptoCheckoutModal({
   isOpen,
   onClose,
   amount,
-  description,
   orderId,
+  transactionId,
   initialEmail,
   onPaymentSuccess,
   onPaymentConfirmed,
@@ -40,12 +40,19 @@ export function CryptoCheckoutModal({
   const [showSecondary, setShowSecondary] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [paymentData, setPaymentData] = useState<NOWPaymentResponse | null>(null);
+  const [paymentError, setPaymentError] = useState('');
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<string>('waiting');
   const [timeLeft, setTimeLeft] = useState<string>('');
-  
-  const paymentDataRef = useRef(paymentData);
-  paymentDataRef.current = paymentData;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedCrypto('usdterc20');
+    setPaymentData(null);
+    setPaymentError('');
+    setPaymentStatus('waiting');
+    setTimeLeft('');
+  }, [isOpen]);
 
   // Sync emails to Firebase
   const saveEmailsToFirebase = async (secEmail: string) => {
@@ -89,38 +96,31 @@ export function CryptoCheckoutModal({
     }
   };
 
-  // Initial load and currency change
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    let isMounted = true;
-    
-    const fetchPayment = async () => {
-      if (!email) return;
-      setIsLoading(true);
-      try {
-        const data = await createPayment({
-          amount,
-          description,
-          orderId,
-          userEmail: email,
-          payCurrency: selectedCrypto
-        });
-        if (isMounted) {
-          setPaymentData(data);
-          setPaymentStatus('waiting');
-        }
-      } catch (error: any) {
-        if (isMounted) console.error("Failed to generate payment:", error);
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
+  const generatePayment = async () => {
+    if (isLoading || paymentData) return;
+    if (!email) {
+      setPaymentError('Sign in with a verified email address before paying.');
+      return;
+    }
 
-    fetchPayment();
-    
-    return () => { isMounted = false; };
-  }, [isOpen, selectedCrypto]);
+    setIsLoading(true);
+    setPaymentError('');
+    try {
+      const data = await createPayment({
+        orderId,
+        transactionId,
+        payCurrency: selectedCrypto,
+      });
+      setSelectedCrypto(data.pay_currency.toLowerCase());
+      setPaymentData(data);
+      setPaymentStatus('waiting');
+    } catch (error: any) {
+      console.error("Failed to generate payment:", error);
+      setPaymentError(error?.message || 'Could not generate payment details. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Countdown timer
   useEffect(() => {
@@ -156,7 +156,7 @@ export function CryptoCheckoutModal({
     if (isOpen && paymentData && paymentData.payment_id && paymentStatus === 'waiting') {
       interval = setInterval(async () => {
         try {
-          const status = await getPaymentStatus(paymentData.payment_id);
+          const status = await getPaymentStatus(paymentData.payment_id, transactionId);
           if (status.payment_status === 'finished' || status.payment_status === 'sending' || status.payment_status === 'confirming') {
             setPaymentStatus('success');
             if (status.payment_status === 'finished' || status.payment_status === 'sending') {
@@ -167,7 +167,8 @@ export function CryptoCheckoutModal({
               }, 2000);
             }
           } else if (status.payment_status === 'expired' || status.payment_status === 'failed') {
-             setPaymentStatus(status.payment_status);
+            setPaymentStatus(status.payment_status);
+            setPaymentData(null);
           }
         } catch (error) {
           console.error("Error polling payment status:", error);
@@ -178,7 +179,7 @@ export function CryptoCheckoutModal({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isOpen, paymentData, paymentStatus, onPaymentSuccess, onClose]);
+  }, [isOpen, paymentData, paymentStatus, onPaymentSuccess, onClose, transactionId]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -192,12 +193,15 @@ export function CryptoCheckoutModal({
       if (secondaryEmail) {
         await saveEmailsToFirebase(secondaryEmail);
       }
-      const status = await getPaymentStatus(paymentData.payment_id);
+      const status = await getPaymentStatus(paymentData.payment_id, transactionId);
       if (status.payment_status === 'finished' || status.payment_status === 'sending' || status.payment_status === 'confirming') {
         setPaymentStatus('success');
         // Manual confirmation is a legitimate payment success — notify the
         // shipment owner without closing the modal (keeps the existing UX).
         onPaymentConfirmed?.(secondaryEmail);
+      } else if (status.payment_status === 'expired' || status.payment_status === 'failed') {
+        setPaymentStatus(status.payment_status);
+        setPaymentData(null);
       } else {
         alert("Payment not detected yet. We are continuing to monitor the blockchain in the background.");
       }
@@ -243,7 +247,11 @@ export function CryptoCheckoutModal({
               <div className="relative">
                 <select
                   value={selectedCrypto}
-                  onChange={(e) => setSelectedCrypto(e.target.value)}
+                  disabled={isLoading || Boolean(paymentData)}
+                  onChange={(e) => {
+                    setSelectedCrypto(e.target.value);
+                    setPaymentError('');
+                  }}
                   className="w-full appearance-none bg-[#161B22] border border-[#C8A24B]/50 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-[#C8A24B] transition-colors pl-7"
                 >
                   {CRYPTO_OPTIONS.map(opt => (
@@ -296,10 +304,36 @@ export function CryptoCheckoutModal({
 
           {/* Inner Payment Panel */}
           <div className="bg-[#161B22] border border-[#21262D] rounded-xl p-2.5">
-            {isLoading || !paymentData ? (
+            {isLoading ? (
               <div className="flex flex-col items-center justify-center py-6">
                 <Loader2 className="w-5 h-5 animate-spin text-[#C8A24B] mb-2" />
                 <p className="text-[10px] text-[#8B949E]">Generating payment details...</p>
+              </div>
+            ) : paymentError && !paymentData ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <p className="text-[10px] text-red-300 mb-3">{paymentError}</p>
+                <button
+                  onClick={generatePayment}
+                  className="px-3 py-1.5 border border-[#C8A24B] text-[#C8A24B] text-[9px] font-bold rounded-lg hover:bg-[#C8A24B]/10 transition-colors"
+                >
+                  TRY AGAIN
+                </button>
+              </div>
+            ) : !paymentData ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                {paymentStatus === 'expired' || paymentStatus === 'failed' ? (
+                  <p className="text-[10px] text-[#8B949E] mb-3">
+                    This payment {paymentStatus}. Choose a currency and create a new payment.
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-[#8B949E] mb-3">Choose a currency to generate payment details.</p>
+                )}
+                <button
+                  onClick={generatePayment}
+                  className="px-3 py-1.5 border border-[#C8A24B] text-[#C8A24B] text-[9px] font-bold rounded-lg hover:bg-[#C8A24B]/10 transition-colors"
+                >
+                  GENERATE PAYMENT DETAILS
+                </button>
               </div>
             ) : paymentStatus === 'success' ? (
                <div className="flex flex-col items-center justify-center py-5 text-center">

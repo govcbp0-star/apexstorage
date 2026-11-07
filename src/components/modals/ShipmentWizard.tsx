@@ -236,7 +236,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
         const description = `Shipment: ${shipmentData.deliveryCity}, ${shipmentData.deliveryCountry}`;
 
         // 2. Create transaction record mapped to order
-        await submitTransaction({
+        const transactionId = await submitTransaction({
           userId: user?.uid || '',
           userEmail: user?.email || '',
           userName: shipmentData.userName,
@@ -259,6 +259,7 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
           amount: shipmentFee || 50,
           description,
           orderId: savedShipmentId,
+          transactionId,
           initialEmail: user?.email || '',
         });
         setShowCheckout(true);
@@ -551,8 +552,8 @@ export default function ShipmentWizard({ open, onClose, onToast, assets, goldSpo
           isOpen={showCheckout}
           onClose={() => setShowCheckout(false)}
           amount={checkoutData.amount}
-          description={checkoutData.description}
           orderId={checkoutData.orderId}
+          transactionId={checkoutData.transactionId}
           initialEmail={checkoutData.initialEmail}
           onPaymentSuccess={(secondaryEmail?: string) => {
             onToast('Payment confirmed! Processing your shipment.', 'success');

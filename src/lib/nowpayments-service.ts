@@ -1,61 +1,9 @@
-// NOWPayments API integration
+import { auth } from '@/lib/firebase';
 
-const API_BASE = 'https://api.nowpayments.io/v1';
-const API_KEY = process.env.NEXT_PUBLIC_NOWPAYMENTS_API_KEY;
-
-export interface PaymentData {
-  orderId: string; // Unique order/shipment ID
-  amount: number; // USD amount
-  description: string;
-  userEmail: string;
-}
-
-export interface NOWInvoiceResponse {
-  id: string;
-  order_id: string;
-  order_description: string;
-  price_amount: number;
-  price_currency: string;
-  pay_currency: string;
-  ipn_callback_url: string;
-  invoice_url: string;
-  success_url: string;
-  cancel_url: string;
-  created_at: string;
-  updated_at: string;
-}
-
-/**
- * Create a hosted invoice via NOWPayments
- */
-export async function createInvoice(data: PaymentData): Promise<NOWInvoiceResponse> {
-  if (!API_KEY) {
-    throw new Error('NOWPayments API key not configured');
-  }
-
-  const response = await fetch(`${API_BASE}/invoice`, {
-    method: 'POST',
-    headers: {
-      'x-api-key': API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      price_amount: data.amount,
-      price_currency: 'usd',
-      order_id: data.orderId,
-      order_description: data.description,
-      ipn_callback_url: `${typeof window === 'undefined' ? '' : window.location.origin}/api/payments/nowpayments-webhook`,
-      success_url: `${typeof window === 'undefined' ? '' : window.location.origin}/dashboard/client?payment=success`,
-      cancel_url: `${typeof window === 'undefined' ? '' : window.location.origin}/dashboard/client?payment=cancelled`,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to create invoice');
-  }
-
-  return response.json();
+export interface CreatePaymentRequest {
+  orderId: string;
+  transactionId: string;
+  payCurrency: string;
 }
 
 export interface NOWPaymentResponse {
@@ -67,69 +15,45 @@ export interface NOWPaymentResponse {
   pay_amount: number;
   pay_currency: string;
   order_id: string;
-  order_description: string;
-  ipn_callback_url: string;
   created_at: string;
-  updated_at: string;
-  purchase_id: string;
-  amount_received: number;
-  payin_extra_id: string | null;
-  smart_contract: string | null;
-  network: string;
-  network_precision: number;
-  time_limit: string | null;
-  burning_percent: number | null;
-  expiration_estimate_date: string;
-  is_fixed_rate: boolean;
-  is_fee_paid_by_user: boolean;
-  valid_until: string;
-  type: string;
 }
 
-export interface PaymentRequest extends PaymentData {
-  payCurrency: string; // e.g., 'btc', 'eth'
-}
+async function postAuthenticated<T>(path: string, data: object): Promise<T> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('Please sign in again before continuing with payment.');
+  }
 
-export async function createPayment(data: PaymentRequest): Promise<NOWPaymentResponse> {
-  if (!API_KEY) throw new Error('NOWPayments API key not configured');
-
-  const response = await fetch(`${API_BASE}/payment`, {
+  const idToken = await user.getIdToken();
+  const response = await fetch(path, {
     method: 'POST',
     headers: {
-      'x-api-key': API_KEY,
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
     },
-    body: JSON.stringify({
-      price_amount: data.amount,
-      price_currency: 'usd',
-      pay_currency: data.payCurrency,
-      order_id: data.orderId,
-      order_description: data.description,
-      ipn_callback_url: `${typeof window === 'undefined' ? '' : window.location.origin}/api/payments/nowpayments-webhook`,
-    }),
+    body: JSON.stringify(data),
   });
+  const result = await response.json().catch(() => ({})) as { message?: string } & T;
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to create payment');
+    throw new Error(result.message || 'The payment request could not be completed.');
   }
-  return response.json();
+
+  return result;
 }
 
-export async function getPaymentStatus(paymentId: string): Promise<{ payment_status: string }> {
-  if (!API_KEY) throw new Error('NOWPayments API key not configured');
+/** Create a payment through our authenticated server route. */
+export function createPayment(data: CreatePaymentRequest): Promise<NOWPaymentResponse> {
+  return postAuthenticated<NOWPaymentResponse>('/api/payments/create', data);
+}
 
-  const response = await fetch(`${API_BASE}/payment/${paymentId}`, {
-    method: 'GET',
-    headers: {
-      'x-api-key': API_KEY,
-    },
+/** Read payment status through our authenticated server route. */
+export function getPaymentStatus(
+  paymentId: string,
+  transactionId: string
+): Promise<{ payment_status: string }> {
+  return postAuthenticated<{ payment_status: string }>('/api/payments/status', {
+    paymentId,
+    transactionId,
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to get payment status');
-  }
-
-  return response.json();
 }

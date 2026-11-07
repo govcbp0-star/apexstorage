@@ -140,12 +140,21 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 # Comma-separated list of admin emails (controls authRole === 'admin')
 NEXT_PUBLIC_ADMIN_EMAILS=admin@example.com
 
-# NOWPayments (https://nowpayments.io/merchants)
-NEXT_PUBLIC_NOWPAYMENTS_API_KEY=...
+# Server-only credentials
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY=...
+RESEND_API_KEY=...
+NOWPAYMENTS_API_KEY=...
 NOWPAYMENTS_IPN_SECRET=...
+
+# Public URL and email sender settings
+APP_URL=https://your-production-domain.example
+EMAIL_FROM=...
+SUPPORT_EMAIL=...
 ```
 
-> The `NEXT_PUBLIC_*` variables are exposed to the browser; keep any truly private keys (like the NOWPayments IPN secret) server-only.
+> `NEXT_PUBLIC_*` variables are exposed to the browser. Keep service-account keys, provider API keys, and webhook secrets server-only.
 
 ### Apply Realtime Database rules
 
@@ -221,8 +230,12 @@ The project is pre-wired for Netlify — see `netlify.toml`, `.nvmrc`, and the `
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Public (browser) |
 | `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | Public (browser) |
 | `NEXT_PUBLIC_ADMIN_EMAILS` | Public (browser) |
-| `NEXT_PUBLIC_NOWPAYMENTS_API_KEY` | Public (browser) |
+| `NOWPAYMENTS_API_KEY` | Server only |
 | `NOWPAYMENTS_IPN_SECRET` | Server only |
+| `FIREBASE_PROJECT_ID` | Server only |
+| `FIREBASE_CLIENT_EMAIL` | Server only |
+| `FIREBASE_PRIVATE_KEY` | Server only |
+| `RESEND_API_KEY` | Server only |
 
 > Don't commit `.env.local` to the repo. It is already excluded via `.gitignore`.
 

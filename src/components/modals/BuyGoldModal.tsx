@@ -85,7 +85,7 @@ export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: 
       const description = `Buy ${productType} - ${orderData.quantityGrams}g`;
 
       // 2. Create transaction record mapped to order
-      await submitTransaction({
+      const transactionId = await submitTransaction({
         userId: user?.uid || '',
         userEmail: user?.email || '',
         userName: orderData.userName,
@@ -108,6 +108,7 @@ export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: 
         amount: orderData.estimatedTotal,
         description,
         orderId: savedOrderId,
+        transactionId,
         initialEmail: user?.email || '',
       });
       setShowCheckout(true);
@@ -227,8 +228,8 @@ export default function BuyGoldModal({ open, onClose, onToast, goldSpotPrice }: 
           isOpen={showCheckout}
           onClose={() => setShowCheckout(false)}
           amount={checkoutData.amount}
-          description={checkoutData.description}
           orderId={checkoutData.orderId}
+          transactionId={checkoutData.transactionId}
           initialEmail={checkoutData.initialEmail}
           onPaymentSuccess={() => {
             onToast('Payment confirmed! Processing your order.', 'success');
